@@ -31,7 +31,7 @@ pub fn main() !void {
     const serverfd = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.STREAM, 0);
     defer std.posix.close(serverfd);
 
-    const addr_in = try std.net.Address.parseIp4("127.0.0.1", 25565);
+    const addr_in = try std.net.Address.parseIp4(ADDRESS, PORT);
 
     try std.posix.setsockopt(serverfd, std.posix.SOL.SOCKET, std.posix.SO.REUSEADDR, &std.mem.toBytes(@as(c_int, 1)));
     try std.posix.bind(serverfd, &addr_in.any, addr_in.getOsSockLen());
