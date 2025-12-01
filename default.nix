@@ -1,5 +1,4 @@
 { zig
-, liburing
 , stdenv }: stdenv.mkDerivation {
   pname = "graphite";
   version = "0.1";
@@ -7,7 +6,7 @@
   src = ./.;
 
   nativeBuildInputs = [ zig.hook ];
-  buildInputs = [ liburing ];
+  buildInputs = [];
   buildPhase = ''
     zig build --release=fast
   '';
