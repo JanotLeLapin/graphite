@@ -1,5 +1,10 @@
 const std = @import("std");
 
+pub const RingError = error{
+    SubmissionQueueFull,
+    CompletionQueueEmpty,
+};
+
 pub const Ring = struct {
     fd: i32,
     sq_mmap: []align(std.heap.page_size_max) u8,
@@ -67,6 +72,58 @@ pub const Ring = struct {
             .cq_entries = @ptrCast(@alignCast(sq_ptr.ptr + params.cq_off.ring_entries)),
             .cqes = @ptrCast(@alignCast(sq_ptr.ptr + params.cq_off.cqes)),
         };
+    }
+
+    pub fn getSqe(self: *Ring) !*std.os.linux.io_uring_sqe {
+        const tail = self.sq_tail.load(.monotonic);
+        const head = self.sq_head.load(.acquire);
+        const mask = self.sq_mask.*;
+
+        const next_tail = tail +% 1;
+        if (next_tail -% head > self.sq_entries.*) {
+            return RingError.SubmissionQueueFull;
+        }
+
+        const index = tail & mask;
+        const sqes: [*]std.os.linux.io_uring_sqe = @ptrCast(@alignCast(self.sqes_mmap.ptr));
+        const sqe = &sqes[index];
+
+        sqe.* = std.mem.zeroes(std.os.linux.io_uring_sqe);
+        self.sq_array[index] = index;
+
+        return sqe;
+    }
+
+    pub fn submit(self: *Ring) !usize {
+        const tail = self.sq_tail.load(.monotonic);
+        const next_tail = tail +% 1;
+
+        self.sq_tail.store(next_tail, .release);
+
+        return std.os.linux.io_uring_enter(self.fd, 1, 0, 0, null);
+    }
+
+    pub fn peekCqe(self: *Ring) ?std.os.linux.io_uring_cqe {
+        const head = self.cq_head.load(.monotonic);
+        const tail = self.cq_tail.load(.acquire);
+
+        if (head == tail) return null;
+
+        const index = head & self.cq_mask.*;
+        const cqe = self.cqes[index];
+
+        self.cq_head.store(head +% 1, .release);
+
+        return cqe;
+    }
+
+    pub fn waitCqe(self: *Ring) !std.os.linux.io_uring_cqe {
+        const cqe = self.peekCqe();
+        if (cqe) |c| return c;
+
+        _ = std.os.linux.io_uring_enter(self.fd, 0, 1, std.os.linux.IORING_ENTER_GETEVENTS, null);
+
+        return self.peekCqe() orelse RingError.CompletionQueueEmpty;
     }
 
     pub fn deinit(self: *Ring) void {
