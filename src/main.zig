@@ -1,25 +1,24 @@
 const std = @import("std");
 
-const common = @import("common.zig");
-const packet = @import("packet.zig");
-const uring = @import("uring.zig");
+const common = @import("common/mod.zig");
+const packet = @import("packet/mod.zig");
 
 const PORT = 25565;
 const ADDRESS = "127.0.0.1";
 
 const URING_QUEUE_ENTRIES = 4096;
 
-fn processPacket(client: *common.Client) void {
+fn processPacket(client: *common.client.Client) void {
     var offset: usize = 0;
 
-    const len = packet.VarInt.decode(&client.read_buf) orelse return;
+    const len = packet.types.VarInt.decode(&client.read_buf) orelse return;
     offset += len.len;
 
     if (client.read_buf_tail - offset > len.value) {
         return;
     }
 
-    const id = packet.VarInt.decode(client.read_buf[offset..]) orelse return;
+    const id = packet.types.VarInt.decode(client.read_buf[offset..]) orelse return;
     offset += id.len;
 
     std.debug.print("packet id: {d}\n", .{id.value});
@@ -32,7 +31,7 @@ fn processPacket(client: *common.Client) void {
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-    var client_manager = try common.ClientManager.init(8, gpa.allocator(), gpa.allocator());
+    var client_manager = try common.client.ClientManager.init(8, gpa.allocator(), gpa.allocator());
     defer client_manager.deinit();
 
     const serverfd = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.STREAM, 0);
@@ -46,7 +45,7 @@ pub fn main() !void {
 
     std.log.info("server listening on port {d}.", .{PORT});
 
-    var ring = try uring.Ring.init(URING_QUEUE_ENTRIES);
+    var ring = try common.uring.Ring.init(URING_QUEUE_ENTRIES);
     defer ring.deinit();
 
     std.log.info("ring initialized: {d}.", .{ring.fd});
@@ -63,7 +62,7 @@ pub fn main() !void {
 
     {
         const sqe = try ring.getSqe();
-        sqe.user_data = @bitCast(common.Userdata{ .op = common.UserdataOp.Accept, .d = 0, .fd = 0 });
+        sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.Accept, .d = 0, .fd = 0 });
         sqe.prep_accept(serverfd, &addr, &addr_len, 0);
     }
 
@@ -72,7 +71,7 @@ pub fn main() !void {
 
     while (true) {
         const cqe = try ring.waitCqe();
-        const ud: common.Userdata = @bitCast(cqe.user_data);
+        const ud: common.uring.Userdata = @bitCast(cqe.user_data);
         switch (ud.op) {
             .Accept => {
                 const cfd = cqe.res;
@@ -85,14 +84,14 @@ pub fn main() !void {
                     const sqe = try ring.getSqe();
                     sqe.opcode = std.os.linux.IORING_OP.ACCEPT;
                     sqe.prep_accept(serverfd, &addr, &addr_len, 0);
-                    sqe.user_data = @bitCast(common.Userdata{ .op = common.UserdataOp.Accept, .d = 0, .fd = cfd });
+                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.Accept, .d = 0, .fd = cfd });
                 }
 
                 {
                     const sqe = try ring.getSqe();
                     sqe.opcode = std.os.linux.IORING_OP.READ;
                     sqe.prep_read(cfd, &client_manager.get(cfd).?.read_buf, 0);
-                    sqe.user_data = @bitCast(common.Userdata{ .op = common.UserdataOp.Read, .d = 0, .fd = cfd });
+                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.Read, .d = 0, .fd = cfd });
                 }
 
                 _ = try ring.submit();
@@ -117,7 +116,7 @@ pub fn main() !void {
                 const sqe = try ring.getSqe();
                 sqe.opcode = std.os.linux.IORING_OP.READ;
                 sqe.prep_read(cfd, client.read_buf[client.read_buf_tail..], 0);
-                sqe.user_data = @bitCast(common.Userdata{ .op = common.UserdataOp.Read, .d = 0, .fd = cfd });
+                sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.Read, .d = 0, .fd = cfd });
 
                 _ = try ring.submit();
             },

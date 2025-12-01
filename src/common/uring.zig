@@ -1,5 +1,16 @@
 const std = @import("std");
 
+pub const UserdataOp = enum(u16) {
+    Accept,
+    Read,
+};
+
+pub const Userdata = packed struct {
+    op: UserdataOp,
+    d: u16,
+    fd: i32,
+};
+
 pub const RingError = error{
     SubmissionQueueFull,
     CompletionQueueEmpty,

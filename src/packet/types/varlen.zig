@@ -1,6 +1,6 @@
 const std = @import("std");
 
-fn Varlen(comptime T: type, comptime n: usize) type {
+pub fn Varlen(comptime T: type, comptime n: usize) type {
     const ShiftType = std.math.Log2Int(T);
     return struct {
         value: T,
@@ -47,6 +47,3 @@ fn Varlen(comptime T: type, comptime n: usize) type {
         }
     };
 }
-
-pub const VarInt = Varlen(i32, 5);
-pub const VarLong = Varlen(i32, 10);

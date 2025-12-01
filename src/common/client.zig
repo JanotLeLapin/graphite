@@ -1,18 +1,5 @@
 const std = @import("std");
 
-const uring = @import("uring.zig");
-
-pub const UserdataOp = enum(u16) {
-    Accept,
-    Read,
-};
-
-pub const Userdata = packed struct {
-    op: UserdataOp,
-    d: u16,
-    fd: i32,
-};
-
 pub const Client = struct {
     fd: i32,
     read_buf: [4096]u8,
@@ -86,10 +73,4 @@ pub const ClientManager = struct {
             self.lookup.items[ufd] = null;
         }
     }
-};
-
-pub const Context = struct {
-    client_manager: ClientManager,
-    ring: uring.Ring,
-    server_fd: i32,
 };
