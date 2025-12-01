@@ -6,14 +6,14 @@ fn Varlen(comptime T: type, comptime n: usize) type {
         value: T,
         len: usize,
 
-        pub fn decode(buf: []const u8, buf_len: usize) ?@This() {
+        pub fn decode(buf: []const u8) ?@This() {
             var res = @This(){
                 .value = 0,
                 .len = 0,
             };
 
             var b: u8 = 0;
-            for (0..@min(n, buf_len)) |i| {
+            for (0..@min(n, buf.len)) |i| {
                 b = buf[i];
                 const shift = @as(ShiftType, 7 * @as(ShiftType, @intCast(i)));
                 const byte_val = @as(T, @intCast(b & 0x7F));
@@ -27,9 +27,9 @@ fn Varlen(comptime T: type, comptime n: usize) type {
             return null;
         }
 
-        pub fn encode(value: T, buf: []u8, buf_len: usize) ?usize {
+        pub fn encode(value: T, buf: []u8) ?usize {
             var b: u8 = 0;
-            for (0..@min(n, buf_len)) |i| {
+            for (0..@min(n, buf.len)) |i| {
                 b = value & 0x7F;
                 value = value >> 7;
                 if (0 != value) {

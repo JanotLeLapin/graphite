@@ -97,14 +97,14 @@ const ClientManager = struct {
 fn processPacket(client: *Client) void {
     var offset: usize = 0;
 
-    const len = packet.VarInt.decode(&client.read_buf, client.read_buf_tail) orelse return;
+    const len = packet.VarInt.decode(&client.read_buf) orelse return;
     offset += len.len;
 
     if (client.read_buf_tail - offset > len.value) {
         return;
     }
 
-    const id = packet.VarInt.decode(client.read_buf[offset..], client.read_buf_tail - offset) orelse return;
+    const id = packet.VarInt.decode(client.read_buf[offset..]) orelse return;
     offset += id.len;
 
     std.debug.print("packet id: {d}\n", .{id.value});
