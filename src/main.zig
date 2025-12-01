@@ -8,7 +8,7 @@ const ADDRESS = "127.0.0.1";
 
 const URING_QUEUE_ENTRIES = 4096;
 
-fn processPacket(client: *common.client.Client) void {
+fn processPacket(ctx: common.Context, client: *common.client.Client) !void {
     var offset: usize = 0;
 
     const len = packet.types.VarInt.decode(&client.read_buf) orelse return;
@@ -22,6 +22,33 @@ fn processPacket(client: *common.client.Client) void {
     offset += id.len;
 
     std.debug.print("packet id: {d}\n", .{id.value});
+
+    switch (client.state) {
+        .Handshake => if (packet.ServerHandshake.decode(client.read_buf[offset..])) |p| {
+            std.debug.print("got handshake: {d}, '{s}:{d}'.\n", .{ p.protocol_version.value, p.server_address, p.server_port });
+            client.state = @enumFromInt(p.next_state);
+        },
+        .Status => {
+            switch (id.value) {
+                0x00 => if (packet.ClientStatusResponse.encode(&.{ .response = "{\"version\":{\"name\":\"1.8.8\",\"protocol\":47},\"players\":{\"max\":20,\"online\":0,\"sample\":[]},\"description\":{\"text\":\"hi\"}}" }, client.write_buf[0..])) |size| {
+                    var sqe = try ctx.ring.getSqe();
+                    sqe.prep_write(client.fd, client.write_buf[0..size], 0);
+                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Write, .d = 0, .fd = client.fd });
+
+                    _ = try ctx.ring.submit();
+                },
+                0x01 => {
+                    var sqe = try ctx.ring.getSqe();
+                    sqe.prep_write(client.fd, client.read_buf[0..10], 0);
+                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Write, .d = 0, .fd = client.fd });
+
+                    _ = try ctx.ring.submit();
+                },
+                else => {},
+            }
+        },
+        .Login => {},
+    }
 
     const total_len = @as(usize, @intCast(len.value)) + len.len;
     @memmove(client.read_buf[0..(client.read_buf_tail - total_len)], client.read_buf[total_len..client.read_buf_tail]);
@@ -55,7 +82,6 @@ pub fn main() !void {
         .ring = &ring,
         .server_fd = serverfd,
     };
-    _ = ctx;
 
     var addr: std.os.linux.sockaddr = undefined;
     var addr_len: std.os.linux.socklen_t = @sizeOf(@TypeOf(addr));
@@ -112,7 +138,7 @@ pub fn main() !void {
 
                 std.debug.print("read {d} bytes from client {d}: {any}\n", .{ bytes, cfd, client_manager.get(cfd).?.read_buf[0..client.read_buf_tail] });
 
-                processPacket(client);
+                try processPacket(ctx, client);
 
                 const sqe = try ring.getSqe();
                 sqe.opcode = std.os.linux.IORING_OP.READ;
@@ -121,6 +147,7 @@ pub fn main() !void {
 
                 _ = try ring.submit();
             },
+            .Write => {},
         }
     }
 }

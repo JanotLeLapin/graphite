@@ -3,6 +3,7 @@ const std = @import("std");
 pub const UserdataOp = enum(u16) {
     Accept,
     Read,
+    Write,
 };
 
 pub const Userdata = packed struct {
