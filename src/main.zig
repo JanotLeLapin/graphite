@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const graphite = @import("graphite");
+const packet = @import("packet.zig");
 const uring = @import("uring.zig");
 
 const PORT = 25565;
@@ -94,6 +94,26 @@ const ClientManager = struct {
     }
 };
 
+fn processPacket(client: *Client) void {
+    var offset: usize = 0;
+
+    const len = packet.VarInt.decode(&client.read_buf, client.read_buf_tail) orelse return;
+    offset += len.len;
+
+    if (client.read_buf_tail - offset > len.value) {
+        return;
+    }
+
+    const id = packet.VarInt.decode(client.read_buf[offset..], client.read_buf_tail - offset) orelse return;
+    offset += id.len;
+
+    std.debug.print("packet id: {d}\n", .{id.value});
+
+    const total_len = @as(usize, @intCast(len.value)) + len.len;
+    @memmove(client.read_buf[0..(client.read_buf_tail - total_len)], client.read_buf[total_len..client.read_buf_tail]);
+    client.read_buf_tail -= total_len;
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
@@ -169,6 +189,8 @@ pub fn main() !void {
                 client.read_buf_tail += bytes;
 
                 std.debug.print("read {d} bytes from client {d}: {any}\n", .{ bytes, cfd, client_manager.get(cfd).?.read_buf[0..client.read_buf_tail] });
+
+                processPacket(client);
 
                 const sqe = try ring.getSqe();
                 sqe.opcode = std.os.linux.IORING_OP.READ;
