@@ -28,18 +28,19 @@ pub fn Varlen(comptime T: type, comptime n: usize) type {
         }
 
         pub fn encode(value: T, buf: []u8) ?usize {
+            var v = value;
             var b: u8 = 0;
             for (0..@min(n, buf.len)) |i| {
-                b = value & 0x7F;
-                value = value >> 7;
-                if (0 != value) {
+                b = @intCast(v & 0x7F);
+                v = v >> 7;
+                if (0 != v) {
                     b |= 0x80;
                 }
 
                 buf[i] = b;
 
-                if (0 == value) {
-                    return i;
+                if (0 == v) {
+                    return i + 1;
                 }
             }
 
