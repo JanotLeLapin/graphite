@@ -22,7 +22,9 @@ const Userdata = packed struct {
 const Client = struct {
     fd: i32,
     read_buf: [4096]u8,
+    read_buf_tail: usize,
     write_buf: [4096]u8,
+    write_buf_tail: usize,
     addr: std.os.linux.sockaddr,
 };
 
@@ -68,6 +70,8 @@ const ClientManager = struct {
 
         const client = try self.client_alloc.create(Client);
         client.fd = fd;
+        client.read_buf_tail = 0;
+        client.write_buf_tail = 0;
         self.lookup.items[ufd] = client;
 
         return client;
@@ -161,11 +165,14 @@ pub fn main() !void {
                     continue;
                 }
 
-                std.debug.print("read {d} bytes from client {d}: {any}\n", .{ bytes, cfd, client_manager.get(cfd).?.read_buf[0..bytes] });
+                const client = client_manager.get(cfd).?;
+                client.read_buf_tail += bytes;
+
+                std.debug.print("read {d} bytes from client {d}: {any}\n", .{ bytes, cfd, client_manager.get(cfd).?.read_buf[0..client.read_buf_tail] });
 
                 const sqe = try ring.getSqe();
                 sqe.opcode = std.os.linux.IORING_OP.READ;
-                sqe.prep_read(cfd, &client_manager.get(cfd).?.read_buf, 0);
+                sqe.prep_read(cfd, client.read_buf[client.read_buf_tail..], 0);
                 sqe.user_data = @bitCast(Userdata{ .op = UserdataOp.Read, .d = 0, .fd = cfd });
 
                 _ = try ring.submit();
