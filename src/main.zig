@@ -1,12 +1,22 @@
 const std = @import("std");
-const graphite = @import("graphite");
 
-const c = @cImport({
-    @cInclude("liburing.h");
-});
+const graphite = @import("graphite");
+const uring = @import("uring.zig");
 
 const PORT = 25565;
 const ADDRESS = "127.0.0.1";
+
+const URING_QUEUE_ENTRIES = 4096;
+
+const UserdataOp = enum(u16) {
+    Accept,
+};
+
+const Userdata = packed struct {
+    op: UserdataOp,
+    d: u16,
+    fd: i32,
+};
 
 pub fn main() !void {
     const serverfd = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.STREAM, 0);
@@ -19,4 +29,31 @@ pub fn main() !void {
     try std.posix.listen(serverfd, 128);
 
     std.log.info("server listening on port {d}.", .{PORT});
+
+    var ring = try uring.Ring.init(URING_QUEUE_ENTRIES);
+    defer ring.deinit();
+
+    std.log.info("ring initialized: {d}.", .{ring.fd});
+
+    var addr: std.os.linux.sockaddr = undefined;
+    var addr_len: std.os.linux.socklen_t = @sizeOf(@TypeOf(addr));
+
+    const sqe = try ring.getSqe();
+    sqe.opcode = std.os.linux.IORING_OP.ACCEPT;
+    sqe.fd = serverfd;
+    sqe.user_data = @bitCast(Userdata{ .op = UserdataOp.Accept, .d = 0, .fd = 0 });
+    sqe.addr = @intFromPtr(&addr);
+    sqe.off = @intFromPtr(&addr_len);
+
+    _ = try ring.submit();
+    std.debug.print("submitted to SQE\n", .{});
+
+    const cqe = try ring.waitCqe();
+    const ud: Userdata = @bitCast(cqe.user_data);
+
+    switch (ud.op) {
+        .Accept => {
+            std.debug.print("new client: {d}\n", .{cqe.res});
+        },
+    }
 }
