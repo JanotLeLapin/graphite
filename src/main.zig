@@ -70,16 +70,31 @@ pub fn main() !void {
                     .addr = addr,
                 };
 
-                const sqe = try ring.getSqe();
-                sqe.opcode = std.os.linux.IORING_OP.READ;
-                sqe.prep_read(cfd, &clients[@intCast(cfd)].read_buf, 0);
-                sqe.user_data = @bitCast(Userdata{ .op = UserdataOp.Read, .d = 0, .fd = cfd });
+                {
+                    const sqe = try ring.getSqe();
+                    sqe.opcode = std.os.linux.IORING_OP.ACCEPT;
+                    sqe.prep_accept(serverfd, &addr, &addr_len, 0);
+                    sqe.user_data = @bitCast(Userdata{ .op = UserdataOp.Accept, .d = 0, .fd = cfd });
+                }
+
+                {
+                    const sqe = try ring.getSqe();
+                    sqe.opcode = std.os.linux.IORING_OP.READ;
+                    sqe.prep_read(cfd, &clients[@intCast(cfd)].read_buf, 0);
+                    sqe.user_data = @bitCast(Userdata{ .op = UserdataOp.Read, .d = 0, .fd = cfd });
+                }
 
                 _ = try ring.submit();
             },
             .Read => {
                 const cfd = ud.fd;
                 const bytes: usize = @intCast(cqe.res);
+
+                if (0 == bytes) {
+                    clients[@intCast(cfd)] = std.mem.zeroes(Client);
+                    std.debug.print("closed client: {d}\n", .{cfd});
+                    continue;
+                }
 
                 std.debug.print("read {d} bytes from client {d}: {any}\n", .{ bytes, cfd, clients[@intCast(cfd)].read_buf[0..bytes] });
 

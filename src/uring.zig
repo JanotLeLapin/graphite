@@ -13,6 +13,7 @@ pub const Ring = struct {
 
     sq_head: *std.atomic.Value(u32),
     sq_tail: *std.atomic.Value(u32),
+    sq_tail_local: u32,
     sq_mask: *const u32,
     sq_entries: *const u32,
     sq_flags: *const u32,
@@ -62,6 +63,7 @@ pub const Ring = struct {
             .sqes_mmap = sqes_ptr,
             .sq_head = @ptrCast(@alignCast(sq_ptr.ptr + params.sq_off.head)),
             .sq_tail = @ptrCast(@alignCast(sq_ptr.ptr + params.sq_off.tail)),
+            .sq_tail_local = @as(*u32, @ptrCast(@alignCast(sq_ptr.ptr + params.sq_off.tail))).*,
             .sq_mask = @ptrCast(@alignCast(sq_ptr.ptr + params.sq_off.ring_mask)),
             .sq_entries = @ptrCast(@alignCast(sq_ptr.ptr + params.sq_off.ring_entries)),
             .sq_flags = @ptrCast(@alignCast(sq_ptr.ptr + params.sq_off.flags)),
@@ -75,12 +77,11 @@ pub const Ring = struct {
     }
 
     pub fn getSqe(self: *Ring) !*std.os.linux.io_uring_sqe {
-        const tail = self.sq_tail.load(.monotonic);
+        const tail = self.sq_tail_local;
         const head = self.sq_head.load(.acquire);
         const mask = self.sq_mask.*;
 
-        const next_tail = tail +% 1;
-        if (next_tail -% head > self.sq_entries.*) {
+        if (tail -% head > self.sq_entries.*) {
             return RingError.SubmissionQueueFull;
         }
 
@@ -90,17 +91,22 @@ pub const Ring = struct {
 
         sqe.* = std.mem.zeroes(std.os.linux.io_uring_sqe);
         self.sq_array[index] = index;
+        self.sq_tail_local = tail +% 1;
 
         return sqe;
     }
 
     pub fn submit(self: *Ring) !usize {
         const tail = self.sq_tail.load(.monotonic);
-        const next_tail = tail +% 1;
+        const to_submit = self.sq_tail_local -% tail;
 
-        self.sq_tail.store(next_tail, .release);
+        if (to_submit == 0) {
+            return 0;
+        }
 
-        return std.os.linux.io_uring_enter(self.fd, 1, 0, 0, null);
+        self.sq_tail.store(self.sq_tail_local, .release);
+
+        return std.os.linux.io_uring_enter(self.fd, to_submit, 0, 0, null);
     }
 
     pub fn peekCqe(self: *Ring) ?std.os.linux.io_uring_cqe {
