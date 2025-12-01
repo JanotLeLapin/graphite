@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const common = @import("common.zig");
 const packet = @import("packet.zig");
 const uring = @import("uring.zig");
 
@@ -8,93 +9,7 @@ const ADDRESS = "127.0.0.1";
 
 const URING_QUEUE_ENTRIES = 4096;
 
-const UserdataOp = enum(u16) {
-    Accept,
-    Read,
-};
-
-const Userdata = packed struct {
-    op: UserdataOp,
-    d: u16,
-    fd: i32,
-};
-
-const Client = struct {
-    fd: i32,
-    read_buf: [4096]u8,
-    read_buf_tail: usize,
-    write_buf: [4096]u8,
-    write_buf_tail: usize,
-    addr: std.os.linux.sockaddr,
-};
-
-const ClientManager = struct {
-    lookup: std.ArrayList(?*Client),
-    lookup_alloc: std.mem.Allocator,
-    client_alloc: std.mem.Allocator,
-
-    pub fn init(
-        initCap: usize,
-        lookup_alloc: std.mem.Allocator,
-        client_alloc: std.mem.Allocator,
-    ) !ClientManager {
-        return ClientManager{
-            .lookup = try std.ArrayList(?*Client).initCapacity(lookup_alloc, initCap),
-            .lookup_alloc = lookup_alloc,
-            .client_alloc = client_alloc,
-        };
-    }
-
-    pub fn deinit(self: *ClientManager) void {
-        self.lookup.deinit(self.lookup_alloc);
-    }
-
-    pub fn get(self: *ClientManager, fd: i32) ?*Client {
-        if (fd < 0) {
-            return null;
-        }
-
-        const ufd: usize = @intCast(fd);
-        if (ufd >= self.lookup.items.len) {
-            return null;
-        }
-
-        return self.lookup.items[ufd];
-    }
-
-    pub fn add(self: *ClientManager, fd: i32) !*Client {
-        const ufd: usize = @intCast(fd);
-        if (ufd >= self.lookup.items.len) {
-            try self.lookup.appendNTimes(self.lookup_alloc, null, ufd - self.lookup.items.len + 1);
-        }
-
-        const client = try self.client_alloc.create(Client);
-        client.fd = fd;
-        client.read_buf_tail = 0;
-        client.write_buf_tail = 0;
-        self.lookup.items[ufd] = client;
-
-        return client;
-    }
-
-    pub fn remove(self: *ClientManager, fd: i32) void {
-        if (fd < 0) {
-            return;
-        }
-
-        const ufd: usize = @intCast(fd);
-        if (self.lookup.items.len < fd) {
-            return;
-        }
-
-        if (self.lookup.items[ufd]) |conn| {
-            self.client_alloc.destroy(conn);
-            self.lookup.items[ufd] = null;
-        }
-    }
-};
-
-fn processPacket(client: *Client) void {
+fn processPacket(client: *common.Client) void {
     var offset: usize = 0;
 
     const len = packet.VarInt.decode(&client.read_buf) orelse return;
@@ -117,7 +32,7 @@ fn processPacket(client: *Client) void {
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-    var client_manager = try ClientManager.init(8, gpa.allocator(), gpa.allocator());
+    var client_manager = try common.ClientManager.init(8, gpa.allocator(), gpa.allocator());
     defer client_manager.deinit();
 
     const serverfd = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.STREAM, 0);
@@ -136,12 +51,19 @@ pub fn main() !void {
 
     std.log.info("ring initialized: {d}.", .{ring.fd});
 
+    const ctx = common.Context{
+        .client_manager = client_manager,
+        .ring = ring,
+        .server_fd = serverfd,
+    };
+    _ = ctx;
+
     var addr: std.os.linux.sockaddr = undefined;
     var addr_len: std.os.linux.socklen_t = @sizeOf(@TypeOf(addr));
 
     {
         const sqe = try ring.getSqe();
-        sqe.user_data = @bitCast(Userdata{ .op = UserdataOp.Accept, .d = 0, .fd = 0 });
+        sqe.user_data = @bitCast(common.Userdata{ .op = common.UserdataOp.Accept, .d = 0, .fd = 0 });
         sqe.prep_accept(serverfd, &addr, &addr_len, 0);
     }
 
@@ -150,7 +72,7 @@ pub fn main() !void {
 
     while (true) {
         const cqe = try ring.waitCqe();
-        const ud: Userdata = @bitCast(cqe.user_data);
+        const ud: common.Userdata = @bitCast(cqe.user_data);
         switch (ud.op) {
             .Accept => {
                 const cfd = cqe.res;
@@ -163,14 +85,14 @@ pub fn main() !void {
                     const sqe = try ring.getSqe();
                     sqe.opcode = std.os.linux.IORING_OP.ACCEPT;
                     sqe.prep_accept(serverfd, &addr, &addr_len, 0);
-                    sqe.user_data = @bitCast(Userdata{ .op = UserdataOp.Accept, .d = 0, .fd = cfd });
+                    sqe.user_data = @bitCast(common.Userdata{ .op = common.UserdataOp.Accept, .d = 0, .fd = cfd });
                 }
 
                 {
                     const sqe = try ring.getSqe();
                     sqe.opcode = std.os.linux.IORING_OP.READ;
                     sqe.prep_read(cfd, &client_manager.get(cfd).?.read_buf, 0);
-                    sqe.user_data = @bitCast(Userdata{ .op = UserdataOp.Read, .d = 0, .fd = cfd });
+                    sqe.user_data = @bitCast(common.Userdata{ .op = common.UserdataOp.Read, .d = 0, .fd = cfd });
                 }
 
                 _ = try ring.submit();
@@ -195,7 +117,7 @@ pub fn main() !void {
                 const sqe = try ring.getSqe();
                 sqe.opcode = std.os.linux.IORING_OP.READ;
                 sqe.prep_read(cfd, client.read_buf[client.read_buf_tail..], 0);
-                sqe.user_data = @bitCast(Userdata{ .op = UserdataOp.Read, .d = 0, .fd = cfd });
+                sqe.user_data = @bitCast(common.Userdata{ .op = common.UserdataOp.Read, .d = 0, .fd = cfd });
 
                 _ = try ring.submit();
             },
