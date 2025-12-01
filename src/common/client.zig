@@ -1,7 +1,14 @@
 const std = @import("std");
 
+pub const ClientState = enum(u8) {
+    Handshake = 0,
+    Status = 1,
+    Login = 2,
+};
+
 pub const Client = struct {
     fd: i32,
+    state: ClientState,
     read_buf: [4096]u8,
     read_buf_tail: usize,
     write_buf: [4096]u8,

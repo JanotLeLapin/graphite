@@ -78,6 +78,7 @@ pub fn main() !void {
                 std.debug.print("new client: {d}\n", .{cfd});
 
                 var client = try client_manager.add(cfd);
+                client.state = .Handshake;
                 client.addr = addr;
 
                 {
