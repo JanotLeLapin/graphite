@@ -52,7 +52,7 @@ pub fn main() !void {
 
     const ctx = common.Context{
         .client_manager = client_manager,
-        .ring = ring,
+        .ring = &ring,
         .server_fd = serverfd,
     };
     _ = ctx;
