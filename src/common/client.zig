@@ -32,6 +32,11 @@ pub const ClientManager = struct {
     }
 
     pub fn deinit(self: *ClientManager) void {
+        for (self.lookup.items) |item| {
+            if (item) |client| {
+                self.client_alloc.destroy(client);
+            }
+        }
         self.lookup.deinit(self.lookup_alloc);
     }
 
