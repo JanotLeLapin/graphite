@@ -11,8 +11,6 @@ pub const Client = struct {
     state: ClientState,
     read_buf: [4096]u8,
     read_buf_tail: usize,
-    write_buf: [4096]u8,
-    write_buf_tail: usize,
     addr: std.os.linux.sockaddr,
 };
 
@@ -59,7 +57,6 @@ pub const ClientManager = struct {
         const client = try self.client_alloc.create(Client);
         client.fd = fd;
         client.read_buf_tail = 0;
-        client.write_buf_tail = 0;
         self.lookup.items[ufd] = client;
 
         return client;
