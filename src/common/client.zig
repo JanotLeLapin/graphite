@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const Uuid = @import("mod.zig").Uuid;
+
 pub const ClientState = enum(u8) {
     Handshake = 0,
     Status = 1,
@@ -14,6 +16,7 @@ pub const Client = struct {
     addr: std.os.linux.sockaddr,
     username_buf: [64]u8,
     username: std.ArrayListUnmanaged(u8),
+    uuid: Uuid,
 };
 
 pub const ClientManager = struct {

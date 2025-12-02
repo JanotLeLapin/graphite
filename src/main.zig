@@ -79,9 +79,27 @@ fn processPacket(
         },
         .LoginStart => {
             client.username = std.ArrayListUnmanaged(u8).initBuffer(&client.username_buf);
-            try client.username.appendSliceBounded(p.LoginStart.username[0..@min(p.LoginStart.username.len, client.username_buf.len - 1)]);
+            client.username.appendSliceBounded(p.LoginStart.username[0..@min(p.LoginStart.username.len, client.username_buf.len - 1)]) catch unreachable;
+
+            var uuid_buf: [36]u8 = undefined;
+            client.uuid = common.Uuid.random(std.crypto.random);
+            client.uuid.stringify(&uuid_buf);
 
             std.log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
+
+            if (ctx.buffer_pool.allocBuf()) |b| {
+                {
+                    errdefer ctx.buffer_pool.releaseBuf(b.idx);
+
+                    const size = packet.ClientLoginSuccess.encode(&.{
+                        .uuid = &uuid_buf,
+                        .username = client.username.items,
+                    }, &b.data) orelse return PacketProcessingError.EncodingFailure;
+
+                    try b.prepareOneshot(ctx.ring, client.fd, size);
+                }
+                _ = try ctx.ring.submit();
+            }
         },
     }
 }

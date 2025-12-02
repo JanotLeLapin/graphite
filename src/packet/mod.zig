@@ -167,3 +167,12 @@ pub const ClientStatusResponse = struct {
         return genEncodeBasic(@This(), 0x00)(self, buf);
     }
 };
+
+pub const ClientLoginSuccess = struct {
+    uuid: []const u8,
+    username: []const u8,
+
+    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+        return genEncodeBasic(@This(), 0x02)(self, buf);
+    }
+};
