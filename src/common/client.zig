@@ -6,6 +6,7 @@ pub const ClientState = enum(u8) {
     Handshake = 0,
     Status = 1,
     Login = 2,
+    Play = 3,
 };
 
 pub const Client = struct {

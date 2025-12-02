@@ -88,17 +88,59 @@ fn processPacket(
             std.log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
 
             if (ctx.buffer_pool.allocBuf()) |b| {
+                errdefer ctx.buffer_pool.releaseBuf(b.idx);
+
+                const size = packet.ClientLoginSuccess.encode(&.{
+                    .uuid = &uuid_buf,
+                    .username = client.username.items,
+                }, &b.data) orelse return PacketProcessingError.EncodingFailure;
+
+                try b.prepareOneshot(ctx.ring, client.fd, size);
+
+                client.state = .Play;
+            } else {
+                return;
+            }
+
+            if (ctx.buffer_pool.allocBuf()) |b| {
                 {
                     errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
-                    const size = packet.ClientLoginSuccess.encode(&.{
-                        .uuid = &uuid_buf,
-                        .username = client.username.items,
+                    const size = packet.ClientPlayJoinGame.encode(&.{
+                        .eid = 0,
+                        .gamemode = @intFromEnum(packet.GamemodeType.Survival),
+                        .dimension = @intFromEnum(packet.Dimension.Overworld),
+                        .difficulty = @intFromEnum(packet.Difficulty.Normal),
+                        .max_players = 20,
+                        .level_type = "default",
+                        .reduced_debug_info = 0,
                     }, &b.data) orelse return PacketProcessingError.EncodingFailure;
 
                     try b.prepareOneshot(ctx.ring, client.fd, size);
                 }
+            } else {
                 _ = try ctx.ring.submit();
+                return;
+            }
+
+            if (ctx.buffer_pool.allocBuf()) |b| {
+                {
+                    errdefer ctx.buffer_pool.releaseBuf(b.idx);
+
+                    const size = packet.ClientPlayPlayerPositionAndLook.encode(&.{
+                        .x = 0.0,
+                        .y = 67.0,
+                        .z = 0.0,
+                        .yaw = 0.0,
+                        .pitch = 0.0,
+                        .flags = 0,
+                    }, &b.data) orelse return PacketProcessingError.EncodingFailure;
+
+                    try b.prepareOneshot(ctx.ring, client.fd, size);
+                }
+            } else {
+                _ = try ctx.ring.submit();
+                return;
             }
         },
     }

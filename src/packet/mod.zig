@@ -4,6 +4,26 @@ pub const common = @import("../common/mod.zig");
 
 pub const types = @import("types/mod.zig");
 
+pub const GamemodeType = enum(u8) {
+    Survival = 0,
+    Creative = 1,
+    Adventure = 2,
+    Spectator = 3,
+};
+
+pub const Dimension = enum(i8) {
+    Nether = -1,
+    Overworld = 0,
+    End = 1,
+};
+
+pub const Difficulty = enum(u8) {
+    Peaceful = 0,
+    Easy = 1,
+    Normal = 2,
+    Hard = 3,
+};
+
 fn genDecodeBasic(comptime T: anytype) fn ([]const u8) ?T {
     return struct {
         fn decode(buf: []const u8) ?T {
@@ -156,6 +176,7 @@ pub const ServerBoundPacket = union(enum) {
                 0x00 => .{ .LoginStart = ServerLoginStart.decode(buf) orelse return null },
                 else => return null,
             },
+            .Play => return null,
         };
     }
 };
@@ -174,5 +195,40 @@ pub const ClientLoginSuccess = struct {
 
     pub fn encode(self: *const @This(), buf: []u8) ?usize {
         return genEncodeBasic(@This(), 0x02)(self, buf);
+    }
+};
+
+pub const ClientPlayKeepAlive = struct {
+    id: types.VarInt,
+
+    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+        return genEncodeBasic(@This(), 0x00)(self, buf);
+    }
+};
+
+pub const ClientPlayJoinGame = struct {
+    eid: i32,
+    gamemode: u8,
+    dimension: i8,
+    difficulty: u8,
+    max_players: u8,
+    level_type: []const u8,
+    reduced_debug_info: u8,
+
+    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+        return genEncodeBasic(@This(), 0x01)(self, buf);
+    }
+};
+
+pub const ClientPlayPlayerPositionAndLook = struct {
+    x: f64,
+    y: f64,
+    z: f64,
+    yaw: f32,
+    pitch: f32,
+    flags: u8,
+
+    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+        return genEncodeBasic(@This(), 0x08)(self, buf);
     }
 };
