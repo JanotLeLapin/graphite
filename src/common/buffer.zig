@@ -66,7 +66,7 @@ pub fn BufferPool(comptime buf_size: comptime_int, comptime cap: comptime_int) t
         }
 
         pub fn deinit(self: *@This()) void {
-            self.buf_alloc.destroy(self.buffers);
+            self.buf_alloc.free(self.buffers);
         }
     };
 }

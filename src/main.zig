@@ -134,6 +134,7 @@ pub fn main() !void {
     defer ring.deinit();
 
     var buffer_pool = try common.buffer.BufferPool(4096, 64).init(gpa.allocator());
+    defer buffer_pool.deinit();
 
     const ctx = common.Context{
         .client_manager = client_manager,
