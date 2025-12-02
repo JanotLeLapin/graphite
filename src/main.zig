@@ -72,7 +72,10 @@ fn processPacket(
         },
         .Login => switch (packet_id) {
             0x00 => if (packet.ServerLoginStart.decode(packet_buf)) |p| {
-                std.log.debug("client: {d}, username: {s}", .{ client.fd, p.username });
+                client.username = std.ArrayListUnmanaged(u8).initBuffer(&client.username_buf);
+                try client.username.appendSliceBounded(p.username[0..@min(p.username.len, client.username_buf.len - 1)]);
+
+                std.log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
             },
             else => std.log.debug("client: {d}, unknown login packet: {d}", .{ client.fd, packet_id }),
         },

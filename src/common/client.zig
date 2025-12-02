@@ -12,6 +12,8 @@ pub const Client = struct {
     read_buf: [4096]u8,
     read_buf_tail: usize,
     addr: std.os.linux.sockaddr,
+    username_buf: [64]u8,
+    username: std.ArrayListUnmanaged(u8),
 };
 
 pub const ClientManager = struct {
