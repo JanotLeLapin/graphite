@@ -109,9 +109,9 @@ fn processPacket(
 
                     const size = packet.ClientPlayJoinGame.encode(&.{
                         .eid = 0,
-                        .gamemode = @intFromEnum(packet.GamemodeType.Survival),
-                        .dimension = @intFromEnum(packet.Dimension.Overworld),
-                        .difficulty = @intFromEnum(packet.Difficulty.Normal),
+                        .gamemode = .Survival,
+                        .dimension = .Overworld,
+                        .difficulty = .Normal,
                         .max_players = 20,
                         .level_type = "default",
                         .reduced_debug_info = 0,

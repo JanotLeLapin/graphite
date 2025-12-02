@@ -111,6 +111,16 @@ fn genEncodeBasic(
                         std.mem.writeInt(FieldType, rem[0..size], @field(self, field.name), .big);
                         offset += size;
                     },
+                    .@"enum" => {
+                        const TagType = @typeInfo(FieldType).@"enum".tag_type;
+                        const size = @sizeOf(TagType);
+                        if (rem.len < size) {
+                            return null;
+                        }
+
+                        std.mem.writeInt(TagType, rem[0..size], @intFromEnum(@field(self, field.name)), .big);
+                        offset += size;
+                    },
                     .float => {
                         const size = @sizeOf(FieldType);
                         if (rem.len < size) {
@@ -227,9 +237,9 @@ pub const ClientPlayKeepAlive = struct {
 
 pub const ClientPlayJoinGame = struct {
     eid: i32,
-    gamemode: u8,
-    dimension: i8,
-    difficulty: u8,
+    gamemode: GamemodeType,
+    dimension: Dimension,
+    difficulty: Difficulty,
     max_players: u8,
     level_type: []const u8,
     reduced_debug_info: u8,
