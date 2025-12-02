@@ -110,6 +110,14 @@ pub fn main() !void {
     var client_manager = try common.client.ClientManager.init(8, gpa.allocator(), gpa.allocator());
     defer client_manager.deinit();
 
+    var sigmask = std.posix.sigemptyset();
+    std.posix.sigaddset(&sigmask, std.posix.SIG.INT);
+    std.posix.sigprocmask(std.posix.SIG.BLOCK, &sigmask, null);
+
+    const sigfd = try std.posix.signalfd(-1, &sigmask, 0);
+    defer std.posix.close(sigfd);
+    var siginfo: std.posix.siginfo_t = undefined;
+
     const serverfd = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.STREAM, 0);
     defer std.posix.close(serverfd);
 
@@ -142,6 +150,12 @@ pub fn main() !void {
         sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Accept, .d = 0, .fd = 0 });
     }
 
+    {
+        const sqe = try ring.getSqe();
+        sqe.prep_read(sigfd, @ptrCast(&siginfo), 0);
+        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Sigint, .d = 0, .fd = 0 });
+    }
+
     _ = try ring.submit();
 
     while (true) {
@@ -171,6 +185,10 @@ pub fn main() !void {
                 }
 
                 _ = try ring.submit();
+            },
+            .Sigint => {
+                std.log.info("caught sigint", .{});
+                break;
             },
             .Read => {
                 const cfd = ud.fd;
