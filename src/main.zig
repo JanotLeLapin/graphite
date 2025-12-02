@@ -41,6 +41,10 @@ pub const std_options = std.Options{
     .logFn = log,
 };
 
+const PacketProcessingError = error{
+    EncodingFailure,
+};
+
 fn processPacket(
     ctx: common.Context,
     client: *common.client.Client,
@@ -49,21 +53,28 @@ fn processPacket(
     switch (p) {
         .Handshake => client.state = @enumFromInt(p.Handshake.next_state),
         .StatusRequest => if (ctx.buffer_pool.allocBuf()) |b| {
-            if (packet.ClientStatusResponse.encode(
-                &.{ .response = "{\"version\":{\"name\":\"1.8.8\",\"protocol\":47},\"players\":{\"max\":20,\"online\":0,\"sample\":[]},\"description\":{\"text\":\"This is a really really long description\",\"color\":\"red\"}}" },
-                &b.data,
-            )) |size| {
+            {
+                errdefer ctx.buffer_pool.releaseBuf(b.idx);
+
+                const size = packet.ClientStatusResponse.encode(
+                    &.{ .response = "{\"version\":{\"name\":\"1.8.8\",\"protocol\":47},\"players\":{\"max\":20,\"online\":0,\"sample\":[]},\"description\":{\"text\":\"This is a really really long description\",\"color\":\"red\"}}" },
+                    &b.data,
+                ) orelse return PacketProcessingError.EncodingFailure;
+
                 try b.prepareOneshot(ctx.ring, client.fd, size);
-                _ = try ctx.ring.submit();
-            } else {
-                ctx.buffer_pool.releaseBuf(b.idx);
             }
+            _ = try ctx.ring.submit();
         },
         .StatusPing => if (ctx.buffer_pool.allocBuf()) |b| {
-            b.data[0] = 9;
-            b.data[1] = 0x01;
-            @memcpy(b.data[2..10], @as([]const u8, @ptrCast(&p.StatusPing.payload)));
-            try b.prepareOneshot(ctx.ring, client.fd, 10);
+            {
+                errdefer ctx.buffer_pool.releaseBuf(b.idx);
+
+                b.data[0] = 9;
+                b.data[1] = 0x01;
+                @memcpy(b.data[2..10], @as([]const u8, @ptrCast(&p.StatusPing.payload)));
+
+                try b.prepareOneshot(ctx.ring, client.fd, 10);
+            }
             _ = try ctx.ring.submit();
         },
         .LoginStart => {
