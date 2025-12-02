@@ -68,7 +68,7 @@ fn processPacket(
                 try b.prepareOneshot(ctx.ring, client.fd, 10);
                 _ = try ctx.ring.submit();
             },
-            else => std.log.debug("client: {d}, unknown status packet id: {d}", .{ client.fd, packet_id }),
+            else => std.log.debug("client: {d}, unknown status packet id: {x}", .{ client.fd, packet_id }),
         },
         .Login => switch (packet_id) {
             0x00 => if (packet.ServerLoginStart.decode(packet_buf)) |p| {
@@ -77,7 +77,7 @@ fn processPacket(
 
                 std.log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
             },
-            else => std.log.debug("client: {d}, unknown login packet: {d}", .{ client.fd, packet_id }),
+            else => std.log.debug("client: {d}, unknown login packet: {x}", .{ client.fd, packet_id }),
         },
     }
 }
@@ -101,7 +101,7 @@ fn splitPackets(ctx: common.Context, client: *common.client.Client) void {
         offset += id.len;
 
         processPacket(ctx, client, id.value, client.read_buf[offset..]) catch |e| {
-            std.log.debug("client: {d}, failed to process packet with id {d}: {s}", .{ client.fd, id.value, @errorName(e) });
+            std.log.debug("client: {d}, failed to process packet with id {x}: {s}", .{ client.fd, id.value, @errorName(e) });
         };
 
         const total_len = @as(usize, @intCast(len.value)) + len.len;
