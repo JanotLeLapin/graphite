@@ -71,6 +71,9 @@ fn processPacket(
             else => std.log.debug("client: {d}, unknown status packet id: {d}", .{ client.fd, packet_id }),
         },
         .Login => switch (packet_id) {
+            0x00 => if (packet.ServerLoginStart.decode(packet_buf)) |p| {
+                std.log.debug("client: {d}, username: {s}", .{ client.fd, p.username });
+            },
             else => std.log.debug("client: {d}, unknown login packet: {d}", .{ client.fd, packet_id }),
         },
     }

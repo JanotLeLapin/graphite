@@ -123,3 +123,11 @@ pub const ClientStatusResponse = struct {
         return size + offset - 5;
     }
 };
+
+pub const ServerLoginStart = struct {
+    username: []const u8,
+
+    pub fn decode(buf: []const u8) ?@This() {
+        return genDecodeBasic(@This())(buf);
+    }
+};
