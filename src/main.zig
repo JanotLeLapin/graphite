@@ -8,28 +8,19 @@ const ADDRESS = "127.0.0.1";
 
 const URING_QUEUE_ENTRIES = 4096;
 
-fn processPacket(ctx: common.Context, client: *common.client.Client) !void {
-    var offset: usize = 0;
-
-    const len = packet.types.VarInt.decode(&client.read_buf) orelse return;
-    offset += len.len;
-
-    if (client.read_buf_tail - offset > len.value) {
-        return;
-    }
-
-    const id = packet.types.VarInt.decode(client.read_buf[offset..]) orelse return;
-    offset += id.len;
-
-    std.debug.print("packet id: {d}\n", .{id.value});
-
+fn processPacket(
+    ctx: common.Context,
+    client: *common.client.Client,
+    packet_id: i32,
+    packet_buf: []const u8,
+) !void {
     switch (client.state) {
-        .Handshake => if (packet.ServerHandshake.decode(client.read_buf[offset..])) |p| {
+        .Handshake => if (packet.ServerHandshake.decode(packet_buf)) |p| {
             std.debug.print("got handshake: {d}, '{s}:{d}'.\n", .{ p.protocol_version.value, p.server_address, p.server_port });
             client.state = @enumFromInt(p.next_state);
         },
         .Status => {
-            switch (id.value) {
+            switch (packet_id) {
                 0x00 => if (ctx.buffer_pool.allocBuf()) |idx| {
                     if (packet.ClientStatusResponse.encode(
                         &.{ .response = "{\"version\":{\"name\":\"1.8.8\",\"protocol\":47},\"players\":{\"max\":20,\"online\":0,\"sample\":[]},\"description\":{\"text\":\"This is a really really long description\",\"color\":\"red\"}}" },
@@ -66,10 +57,33 @@ fn processPacket(ctx: common.Context, client: *common.client.Client) !void {
         },
         .Login => {},
     }
+}
 
-    const total_len = @as(usize, @intCast(len.value)) + len.len;
-    @memmove(client.read_buf[0..(client.read_buf_tail - total_len)], client.read_buf[total_len..client.read_buf_tail]);
-    client.read_buf_tail -= total_len;
+fn splitPackets(ctx: common.Context, client: *common.client.Client) !void {
+    while (true) {
+        if (client.read_buf_tail == 0) {
+            break;
+        }
+
+        var offset: usize = 0;
+
+        const len = packet.types.VarInt.decode(&client.read_buf) orelse break;
+        offset += len.len;
+
+        if (client.read_buf_tail - offset > len.value) {
+            break;
+        }
+
+        const id = packet.types.VarInt.decode(client.read_buf[offset..]) orelse break;
+        offset += id.len;
+
+        std.debug.print("packet id: {d}\n", .{id.value});
+        try processPacket(ctx, client, id.value, client.read_buf[offset..]);
+
+        const total_len = @as(usize, @intCast(len.value)) + len.len;
+        @memmove(client.read_buf[0..(client.read_buf_tail - total_len)], client.read_buf[total_len..client.read_buf_tail]);
+        client.read_buf_tail -= total_len;
+    }
 }
 
 pub fn main() !void {
@@ -158,7 +172,7 @@ pub fn main() !void {
 
                 std.debug.print("read {d} bytes from client {d}: {any}\n", .{ bytes, cfd, client_manager.get(cfd).?.read_buf[0..client.read_buf_tail] });
 
-                try processPacket(ctx, client);
+                try splitPackets(ctx, client);
 
                 const sqe = try ring.getSqe();
                 sqe.opcode = std.os.linux.IORING_OP.READ;
