@@ -138,8 +138,8 @@ pub fn main() !void {
 
     {
         const sqe = try ring.getSqe();
-        sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.Accept, .d = 0, .fd = 0 });
         sqe.prep_accept(serverfd, &addr, &addr_len, 0);
+        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Accept, .d = 0, .fd = 0 });
     }
 
     _ = try ring.submit();
