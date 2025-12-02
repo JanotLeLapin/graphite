@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const uring = @import("uring.zig");
+
 pub const BufferType = union(enum) {
     Broadcast,
     Oneshot,
@@ -8,8 +10,18 @@ pub const BufferType = union(enum) {
 pub fn Buffer(comptime size: comptime_int) type {
     return struct {
         t: BufferType,
+        idx: usize,
         data: [size]u8,
         size: usize,
+
+        pub fn prepareOneshot(self: *@This(), ring: *uring.Ring, fd: i32, len: usize) !void {
+            self.t = .Oneshot;
+            self.size = len;
+
+            var sqe = try ring.getSqe();
+            sqe.prep_write(fd, self.data[0..len], 0);
+            sqe.user_data = @bitCast(uring.Userdata{ .op = .Write, .d = @intCast(self.idx), .fd = fd });
+        }
     };
 }
 
@@ -30,21 +42,22 @@ pub fn BufferPool(comptime buf_size: comptime_int, comptime cap: comptime_int) t
                 .buf_alloc = buf_alloc,
             };
 
-            for (&res.idx_stack, 0..) |*idx, i| {
+            for (&res.idx_stack, res.buffers, 0..) |*idx, *b, i| {
                 idx.* = i;
+                b.idx = i;
             }
 
             return res;
         }
 
-        pub fn allocBuf(self: *@This()) ?usize {
+        pub fn allocBuf(self: *@This()) ?*B {
             if (self.stack_head <= 0) {
                 return null;
             }
 
             const idx = self.idx_stack[self.stack_head];
             self.stack_head -= 1;
-            return idx;
+            return &self.buffers[idx];
         }
 
         pub fn releaseBuf(self: *@This(), idx: usize) void {

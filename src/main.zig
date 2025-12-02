@@ -21,35 +21,20 @@ fn processPacket(
         },
         .Status => {
             switch (packet_id) {
-                0x00 => if (ctx.buffer_pool.allocBuf()) |idx| {
+                0x00 => if (ctx.buffer_pool.allocBuf()) |b| {
                     if (packet.ClientStatusResponse.encode(
                         &.{ .response = "{\"version\":{\"name\":\"1.8.8\",\"protocol\":47},\"players\":{\"max\":20,\"online\":0,\"sample\":[]},\"description\":{\"text\":\"This is a really really long description\",\"color\":\"red\"}}" },
-                        &ctx.buffer_pool.buffers[idx].data,
+                        &b.data,
                     )) |size| {
-                        ctx.buffer_pool.buffers[idx].t = .Oneshot;
-                        ctx.buffer_pool.buffers[idx].size = size;
-
-                        var sqe = try ctx.ring.getSqe();
-                        sqe.prep_write(client.fd, ctx.buffer_pool.buffers[idx].data[0..size], 0);
-                        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Write, .d = @intCast(idx), .fd = client.fd });
-
+                        try b.prepareOneshot(ctx.ring, client.fd, size);
                         _ = try ctx.ring.submit();
                     } else {
-                        ctx.buffer_pool.releaseBuf(idx);
+                        ctx.buffer_pool.releaseBuf(b.idx);
                     }
                 },
-                0x01 => if (ctx.buffer_pool.allocBuf()) |idx| {
-                    ctx.buffer_pool.buffers[idx].t = .Oneshot;
-                    ctx.buffer_pool.buffers[idx].size = 10;
-                    @memcpy(
-                        ctx.buffer_pool.buffers[idx].data[0..10],
-                        client.read_buf[0..10],
-                    );
-
-                    var sqe = try ctx.ring.getSqe();
-                    sqe.prep_write(client.fd, ctx.buffer_pool.buffers[idx].data[0..10], 0);
-                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Write, .d = @intCast(idx), .fd = client.fd });
-
+                0x01 => if (ctx.buffer_pool.allocBuf()) |b| {
+                    @memcpy(b.data[0..10], client.read_buf[0..10]);
+                    try b.prepareOneshot(ctx.ring, client.fd, 10);
                     _ = try ctx.ring.submit();
                 },
                 else => {},
