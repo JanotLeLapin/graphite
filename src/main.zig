@@ -77,7 +77,7 @@ fn processPacket(
     }
 }
 
-fn splitPackets(ctx: common.Context, client: *common.client.Client) !void {
+fn splitPackets(ctx: common.Context, client: *common.client.Client) void {
     while (true) {
         if (client.read_buf_tail == 0) {
             break;
@@ -96,7 +96,9 @@ fn splitPackets(ctx: common.Context, client: *common.client.Client) !void {
         offset += id.len;
 
         std.debug.print("packet id: {d}\n", .{id.value});
-        try processPacket(ctx, client, id.value, client.read_buf[offset..]);
+        processPacket(ctx, client, id.value, client.read_buf[offset..]) catch |e| {
+            std.log.debug("client: {d}, failed to process packet with id {d}: {s}", .{ client.fd, id.value, @errorName(e) });
+        };
 
         const total_len = @as(usize, @intCast(len.value)) + len.len;
         @memmove(client.read_buf[0..(client.read_buf_tail - total_len)], client.read_buf[total_len..client.read_buf_tail]);
@@ -190,7 +192,7 @@ pub fn main() !void {
 
                 std.debug.print("read {d} bytes from client {d}: {any}\n", .{ bytes, cfd, client_manager.get(cfd).?.read_buf[0..client.read_buf_tail] });
 
-                try splitPackets(ctx, client);
+                splitPackets(ctx, client);
 
                 const sqe = try ring.getSqe();
                 sqe.opcode = std.os.linux.IORING_OP.READ;
