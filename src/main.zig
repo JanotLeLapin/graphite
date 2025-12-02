@@ -49,7 +49,6 @@ fn processPacket(
 ) !void {
     switch (client.state) {
         .Handshake => if (packet.ServerHandshake.decode(packet_buf)) |p| {
-            std.debug.print("got handshake: {d}, '{s}:{d}'.\n", .{ p.protocol_version.value, p.server_address, p.server_port });
             client.state = @enumFromInt(p.next_state);
         },
         .Status => {
@@ -95,7 +94,6 @@ fn splitPackets(ctx: common.Context, client: *common.client.Client) void {
         const id = packet.types.VarInt.decode(client.read_buf[offset..]) orelse break;
         offset += id.len;
 
-        std.debug.print("packet id: {d}\n", .{id.value});
         processPacket(ctx, client, id.value, client.read_buf[offset..]) catch |e| {
             std.log.debug("client: {d}, failed to process packet with id {d}: {s}", .{ client.fd, id.value, @errorName(e) });
         };
@@ -126,8 +124,6 @@ pub fn main() !void {
     var ring = try common.uring.Ring.init(URING_QUEUE_ENTRIES);
     defer ring.deinit();
 
-    std.log.info("ring initialized: {d}.", .{ring.fd});
-
     var buffer_pool = try common.buffer.BufferPool(4096, 64).init(gpa.allocator());
 
     const ctx = common.Context{
@@ -147,7 +143,6 @@ pub fn main() !void {
     }
 
     _ = try ring.submit();
-    std.debug.print("submitted to SQE\n", .{});
 
     while (true) {
         const cqe = try ring.waitCqe();
@@ -155,7 +150,7 @@ pub fn main() !void {
         switch (ud.op) {
             .Accept => {
                 const cfd = cqe.res;
-                std.debug.print("new client: {d}\n", .{cfd});
+                std.log.debug("client: {d} connected", .{cfd});
 
                 var client = try client_manager.add(cfd);
                 client.state = .Handshake;
@@ -183,14 +178,18 @@ pub fn main() !void {
 
                 if (0 == bytes) {
                     client_manager.remove(cfd);
-                    std.debug.print("closed client: {d}\n", .{cfd});
+                    std.log.debug("client: {d} disconnected", .{cfd});
                     continue;
                 }
 
                 const client = client_manager.get(cfd).?;
                 client.read_buf_tail += bytes;
 
-                std.debug.print("read {d} bytes from client {d}: {any}\n", .{ bytes, cfd, client_manager.get(cfd).?.read_buf[0..client.read_buf_tail] });
+                std.log.debug("client: {d}, read {d} bytes: {any}", .{
+                    cfd,
+                    bytes,
+                    client_manager.get(cfd).?.read_buf[client.read_buf_tail - bytes .. client.read_buf_tail],
+                });
 
                 splitPackets(ctx, client);
 

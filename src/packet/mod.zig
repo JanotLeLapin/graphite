@@ -120,7 +120,6 @@ pub const ClientStatusResponse = struct {
         const size = types.VarInt.encode(@intCast(offset - 5), buf) orelse return null;
         @memmove(buf[size .. size + offset], buf[5 .. 5 + offset]);
 
-        std.debug.print("offset: {d}\n", .{size + offset});
         return size + offset - 5;
     }
 };
