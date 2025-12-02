@@ -249,6 +249,19 @@ pub const ClientPlayJoinGame = struct {
     }
 };
 
+pub const ClientPlayChatMessage = struct {
+    json: []const u8,
+    position: enum(u8) {
+        Chat = 0,
+        System = 1,
+        Hotbar = 2,
+    },
+
+    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+        return genEncodeBasic(@This(), 0x02)(self, buf);
+    }
+};
+
 pub const ClientPlayPlayerPositionAndLook = struct {
     x: f64,
     y: f64,
