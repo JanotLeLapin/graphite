@@ -268,6 +268,11 @@ pub fn main() !void {
             },
             .Read => {
                 const cfd = ud.fd;
+                if (cqe.res < 0) {
+                    std.log.err("cqe error: {d}", .{cqe.res});
+                    continue;
+                }
+
                 const bytes: usize = @intCast(cqe.res);
 
                 if (0 == bytes) {
