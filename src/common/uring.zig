@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const UserdataOp = enum(u16) {
+pub const UserdataOp = enum(u4) {
     Accept,
     Read,
     Write,
@@ -8,7 +8,7 @@ pub const UserdataOp = enum(u16) {
 
 pub const Userdata = packed struct {
     op: UserdataOp,
-    d: u16,
+    d: u28,
     fd: i32,
 };
 
