@@ -1,5 +1,7 @@
 const std = @import("std");
 
+pub const common = @import("../common/mod.zig");
+
 pub const types = @import("types/mod.zig");
 
 fn genDecodeBasic(comptime T: anytype) fn ([]const u8) ?T {
@@ -116,11 +118,11 @@ pub const ServerHandshake = struct {
     }
 };
 
-pub const ClientStatusResponse = struct {
-    response: []const u8,
+pub const ServerStatusPing = struct {
+    payload: u64,
 
-    pub fn encode(self: *const @This(), buf: []u8) ?usize {
-        return genEncodeBasic(@This(), 0x00)(self, buf);
+    pub fn decode(buf: []const u8) ?@This() {
+        return genDecodeBasic(@This())(buf);
     }
 };
 
@@ -129,5 +131,39 @@ pub const ServerLoginStart = struct {
 
     pub fn decode(buf: []const u8) ?@This() {
         return genDecodeBasic(@This())(buf);
+    }
+};
+
+pub const ServerBoundPacket = union(enum) {
+    Handshake: ServerHandshake,
+    StatusRequest,
+    StatusPing: ServerStatusPing,
+    LoginStart: ServerLoginStart,
+
+    pub fn decode(
+        state: common.client.ClientState,
+        packet_id: i32,
+        buf: []const u8,
+    ) ?ServerBoundPacket {
+        return switch (state) {
+            .Handshake => .{ .Handshake = ServerHandshake.decode(buf) orelse return null },
+            .Status => switch (packet_id) {
+                0x00 => .{ .StatusRequest = undefined },
+                0x01 => .{ .StatusPing = ServerStatusPing.decode(buf) orelse return null },
+                else => return null,
+            },
+            .Login => switch (packet_id) {
+                0x00 => .{ .LoginStart = ServerLoginStart.decode(buf) orelse return null },
+                else => return null,
+            },
+        };
+    }
+};
+
+pub const ClientStatusResponse = struct {
+    response: []const u8,
+
+    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+        return genEncodeBasic(@This(), 0x00)(self, buf);
     }
 };

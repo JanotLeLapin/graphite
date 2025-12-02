@@ -44,40 +44,33 @@ pub const std_options = std.Options{
 fn processPacket(
     ctx: common.Context,
     client: *common.client.Client,
-    packet_id: i32,
-    packet_buf: []const u8,
+    p: packet.ServerBoundPacket,
 ) !void {
-    switch (client.state) {
-        .Handshake => if (packet.ServerHandshake.decode(packet_buf)) |p| {
-            client.state = @enumFromInt(p.next_state);
-        },
-        .Status => switch (packet_id) {
-            0x00 => if (ctx.buffer_pool.allocBuf()) |b| {
-                if (packet.ClientStatusResponse.encode(
-                    &.{ .response = "{\"version\":{\"name\":\"1.8.8\",\"protocol\":47},\"players\":{\"max\":20,\"online\":0,\"sample\":[]},\"description\":{\"text\":\"This is a really really long description\",\"color\":\"red\"}}" },
-                    &b.data,
-                )) |size| {
-                    try b.prepareOneshot(ctx.ring, client.fd, size);
-                    _ = try ctx.ring.submit();
-                } else {
-                    ctx.buffer_pool.releaseBuf(b.idx);
-                }
-            },
-            0x01 => if (ctx.buffer_pool.allocBuf()) |b| {
-                @memcpy(b.data[0..10], client.read_buf[0..10]);
-                try b.prepareOneshot(ctx.ring, client.fd, 10);
+    switch (p) {
+        .Handshake => client.state = @enumFromInt(p.Handshake.next_state),
+        .StatusRequest => if (ctx.buffer_pool.allocBuf()) |b| {
+            if (packet.ClientStatusResponse.encode(
+                &.{ .response = "{\"version\":{\"name\":\"1.8.8\",\"protocol\":47},\"players\":{\"max\":20,\"online\":0,\"sample\":[]},\"description\":{\"text\":\"This is a really really long description\",\"color\":\"red\"}}" },
+                &b.data,
+            )) |size| {
+                try b.prepareOneshot(ctx.ring, client.fd, size);
                 _ = try ctx.ring.submit();
-            },
-            else => std.log.debug("client: {d}, unknown status packet id: {x}", .{ client.fd, packet_id }),
+            } else {
+                ctx.buffer_pool.releaseBuf(b.idx);
+            }
         },
-        .Login => switch (packet_id) {
-            0x00 => if (packet.ServerLoginStart.decode(packet_buf)) |p| {
-                client.username = std.ArrayListUnmanaged(u8).initBuffer(&client.username_buf);
-                try client.username.appendSliceBounded(p.username[0..@min(p.username.len, client.username_buf.len - 1)]);
+        .StatusPing => if (ctx.buffer_pool.allocBuf()) |b| {
+            b.data[0] = 9;
+            b.data[1] = 0x01;
+            @memcpy(b.data[2..10], @as([]const u8, @ptrCast(&p.StatusPing.payload)));
+            try b.prepareOneshot(ctx.ring, client.fd, 10);
+            _ = try ctx.ring.submit();
+        },
+        .LoginStart => {
+            client.username = std.ArrayListUnmanaged(u8).initBuffer(&client.username_buf);
+            try client.username.appendSliceBounded(p.LoginStart.username[0..@min(p.LoginStart.username.len, client.username_buf.len - 1)]);
 
-                std.log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
-            },
-            else => std.log.debug("client: {d}, unknown login packet: {x}", .{ client.fd, packet_id }),
+            std.log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
         },
     }
 }
@@ -100,9 +93,13 @@ fn splitPackets(ctx: common.Context, client: *common.client.Client) void {
         const id = packet.types.VarInt.decode(client.read_buf[offset..]) orelse break;
         offset += id.len;
 
-        processPacket(ctx, client, id.value, client.read_buf[offset..]) catch |e| {
-            std.log.debug("client: {d}, failed to process packet with id {x}: {s}", .{ client.fd, id.value, @errorName(e) });
-        };
+        if (packet.ServerBoundPacket.decode(client.state, id.value, client.read_buf[offset..])) |p| {
+            processPacket(ctx, client, p) catch |e| {
+                std.log.debug("client: {d}, failed to process packet with id {x}: {s}", .{ client.fd, id.value, @errorName(e) });
+            };
+        } else {
+            std.log.debug("client: {d}, unknown packet with id: {x}", .{ client.fd, id.value });
+        }
 
         const total_len = @as(usize, @intCast(len.value)) + len.len;
         @memmove(client.read_buf[0..(client.read_buf_tail - total_len)], client.read_buf[total_len..client.read_buf_tail]);
