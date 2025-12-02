@@ -30,17 +30,34 @@ fn processPacket(ctx: common.Context, client: *common.client.Client) !void {
         },
         .Status => {
             switch (id.value) {
-                0x00 => if (packet.ClientStatusResponse.encode(&.{ .response = "{\"version\":{\"name\":\"1.8.8\",\"protocol\":47},\"players\":{\"max\":20,\"online\":0,\"sample\":[]},\"description\":{\"text\":\"hi\"}}" }, client.write_buf[0..])) |size| {
-                    var sqe = try ctx.ring.getSqe();
-                    sqe.prep_write(client.fd, client.write_buf[0..size], 0);
-                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Write, .d = 0, .fd = client.fd });
+                0x00 => if (ctx.buffer_pool.allocBuf()) |idx| {
+                    if (packet.ClientStatusResponse.encode(
+                        &.{ .response = "{\"version\":{\"name\":\"1.8.8\",\"protocol\":47},\"players\":{\"max\":20,\"online\":0,\"sample\":[]},\"description\":{\"text\":\"This is a really really long description\",\"color\":\"red\"}}" },
+                        &ctx.buffer_pool.buffers[idx].data,
+                    )) |size| {
+                        ctx.buffer_pool.buffers[idx].t = .Oneshot;
+                        ctx.buffer_pool.buffers[idx].size = size;
 
-                    _ = try ctx.ring.submit();
+                        var sqe = try ctx.ring.getSqe();
+                        sqe.prep_write(client.fd, ctx.buffer_pool.buffers[idx].data[0..size], 0);
+                        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Write, .d = @intCast(idx), .fd = client.fd });
+
+                        _ = try ctx.ring.submit();
+                    } else {
+                        ctx.buffer_pool.releaseBuf(idx);
+                    }
                 },
-                0x01 => {
+                0x01 => if (ctx.buffer_pool.allocBuf()) |idx| {
+                    ctx.buffer_pool.buffers[idx].t = .Oneshot;
+                    ctx.buffer_pool.buffers[idx].size = 10;
+                    @memcpy(
+                        ctx.buffer_pool.buffers[idx].data[0..10],
+                        client.read_buf[0..10],
+                    );
+
                     var sqe = try ctx.ring.getSqe();
-                    sqe.prep_write(client.fd, client.read_buf[0..10], 0);
-                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Write, .d = 0, .fd = client.fd });
+                    sqe.prep_write(client.fd, ctx.buffer_pool.buffers[idx].data[0..10], 0);
+                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Write, .d = @intCast(idx), .fd = client.fd });
 
                     _ = try ctx.ring.submit();
                 },
@@ -77,10 +94,13 @@ pub fn main() !void {
 
     std.log.info("ring initialized: {d}.", .{ring.fd});
 
+    var buffer_pool = try common.buffer.BufferPool(4096, 64).init(gpa.allocator());
+
     const ctx = common.Context{
         .client_manager = client_manager,
         .ring = &ring,
         .server_fd = serverfd,
+        .buffer_pool = &buffer_pool,
     };
 
     var addr: std.os.linux.sockaddr = undefined;
@@ -147,7 +167,16 @@ pub fn main() !void {
 
                 _ = try ring.submit();
             },
-            .Write => {},
+            .Write => {
+                const b = &ctx.buffer_pool.buffers[@intCast(ud.d)];
+
+                switch (b.t) {
+                    .Oneshot => {
+                        ctx.buffer_pool.releaseBuf(@intCast(ud.d));
+                    },
+                    else => {},
+                }
+            },
         }
     }
 }
