@@ -96,6 +96,7 @@ fn processPacket(
                 }, &b.data) orelse return PacketProcessingError.EncodingFailure;
 
                 try b.prepareOneshot(ctx.ring, client.fd, size);
+                _ = try ctx.ring.submit();
 
                 client.state = .Play;
             } else {
@@ -117,9 +118,9 @@ fn processPacket(
                     }, &b.data) orelse return PacketProcessingError.EncodingFailure;
 
                     try b.prepareOneshot(ctx.ring, client.fd, size);
+                    _ = try ctx.ring.submit();
                 }
             } else {
-                _ = try ctx.ring.submit();
                 return;
             }
 
@@ -137,10 +138,8 @@ fn processPacket(
                     }, &b.data) orelse return PacketProcessingError.EncodingFailure;
 
                     try b.prepareOneshot(ctx.ring, client.fd, size);
+                    _ = try ctx.ring.submit();
                 }
-            } else {
-                _ = try ctx.ring.submit();
-                return;
             }
         },
     }
