@@ -39,13 +39,23 @@ fn genDecodeBasic(comptime T: anytype) fn ([]const u8) ?T {
                 const FieldType = field.type;
 
                 switch (@typeInfo(FieldType)) {
-                    .int, .float => {
+                    .int => {
                         const size = @sizeOf(FieldType);
                         if (rem.len < size) {
                             return null;
                         }
 
                         const raw = std.mem.readInt(FieldType, rem[0..size], .big);
+                        @field(res, field.name) = @bitCast(raw);
+                        offset += size;
+                    },
+                    .float => {
+                        const size = @sizeOf(FieldType);
+                        if (rem.len < size) {
+                            return null;
+                        }
+
+                        const raw = rem[0..size];
                         @field(res, field.name) = @bitCast(raw);
                         offset += size;
                     },
@@ -92,13 +102,22 @@ fn genEncodeBasic(
                 const FieldType = field.type;
 
                 switch (@typeInfo(FieldType)) {
-                    .int, .float => {
+                    .int => {
                         const size = @sizeOf(FieldType);
                         if (rem.len < size) {
                             return null;
                         }
 
                         std.mem.writeInt(FieldType, rem[0..size], @field(self, field.name), .big);
+                        offset += size;
+                    },
+                    .float => {
+                        const size = @sizeOf(FieldType);
+                        if (rem.len < size) {
+                            return null;
+                        }
+
+                        rem[0..size].* = @bitCast(@field(self, field.name));
                         offset += size;
                     },
                     .pointer => |p| {
