@@ -162,6 +162,9 @@ fn processPacket(
                 return;
             }
         },
+        .PlayChatMessage => |pd| {
+            dispatch(ctx, "onChatMessage", .{ client, pd.message });
+        },
     }
 }
 

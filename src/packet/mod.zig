@@ -183,11 +183,20 @@ pub const ServerLoginStart = struct {
     }
 };
 
+pub const ServerPlayChatMessage = struct {
+    message: []const u8,
+
+    pub fn decode(buf: []const u8) ?@This() {
+        return genDecodeBasic(@This())(buf);
+    }
+};
+
 pub const ServerBoundPacket = union(enum) {
     Handshake: ServerHandshake,
     StatusRequest,
     StatusPing: ServerStatusPing,
     LoginStart: ServerLoginStart,
+    PlayChatMessage: ServerPlayChatMessage,
 
     pub fn decode(
         state: common.client.ClientState,
@@ -205,7 +214,10 @@ pub const ServerBoundPacket = union(enum) {
                 0x00 => .{ .LoginStart = ServerLoginStart.decode(buf) orelse return null },
                 else => return null,
             },
-            .Play => return null,
+            .Play => switch (packet_id) {
+                0x01 => .{ .PlayChatMessage = ServerPlayChatMessage.decode(buf) orelse return null },
+                else => return null,
+            },
         };
     }
 };
