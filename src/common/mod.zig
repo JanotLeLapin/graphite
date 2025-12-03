@@ -1,8 +1,35 @@
 const std = @import("std");
 
+const Modules = @import("root").Modules;
+
 pub const buffer = @import("buffer.zig");
 pub const client = @import("client.zig");
 pub const uring = @import("uring.zig");
+
+pub const ModuleRegistry = struct {
+    instances: std.meta.Tuple(&Modules),
+
+    pub fn init(alloc: std.mem.Allocator) !ModuleRegistry {
+        var self: ModuleRegistry = undefined;
+
+        inline for (Modules, 0..) |ModuleType, i| {
+            self.instances[i] = try ModuleType.init(alloc);
+        }
+        return self;
+    }
+
+    pub fn get(self: *ModuleRegistry, comptime T: type) *T {
+        const index = comptime findIndex(T);
+        return self.instances[index];
+    }
+
+    pub fn findIndex(comptime T: type) usize {
+        inline for (Modules, 0..) |ModuleType, i| {
+            if (ModuleType == T) return i;
+        }
+        @compileError("Unrecognized module " ++ @typeName(T));
+    }
+};
 
 pub const Uuid = struct {
     bytes: [16]u8,
@@ -30,4 +57,5 @@ pub const Context = struct {
     client_manager: client.ClientManager,
     ring: *uring.Ring,
     buffer_pool: *buffer.BufferPool(4096, 64),
+    module_registry: ModuleRegistry,
 };

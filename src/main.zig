@@ -8,6 +8,10 @@ const ADDRESS = "127.0.0.1";
 
 const URING_QUEUE_ENTRIES = 4096;
 
+pub const Modules = .{
+    @import("module/default.zig").DefaultModule,
+};
+
 pub fn log(
     comptime message_level: std.log.Level,
     comptime scope: @Type(.enum_literal),
@@ -119,6 +123,15 @@ fn processPacket(
 
                     try b.prepareOneshot(ctx.ring, client.fd, offset);
                     client.state = .Play;
+
+                    inline for (Modules, 0..) |ModuleType, i| {
+                        var instance = ctx.module_registry.instances[i];
+                        if (@hasDecl(ModuleType, "onJoin")) {
+                            instance.onJoin(ctx, client) catch |e| {
+                                std.log.err("module {s}: onJoin: {s}", .{ @typeName(ModuleType), @errorName(e) });
+                            };
+                        }
+                    }
                 }
 
                 _ = try ctx.ring.submit();
@@ -228,6 +241,7 @@ pub fn main() !void {
         .client_manager = client_manager,
         .ring = &ring,
         .buffer_pool = &buffer_pool,
+        .module_registry = try common.ModuleRegistry.init(gpa.allocator()),
     };
 
     {
