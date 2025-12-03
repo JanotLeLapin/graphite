@@ -10,6 +10,7 @@ const URING_QUEUE_ENTRIES = 4096;
 
 pub const Modules = .{
     @import("module/default.zig").DefaultModule,
+    @import("module/wordle.zig").WordleModule,
 };
 
 fn dispatch(
