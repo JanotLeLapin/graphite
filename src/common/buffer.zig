@@ -3,6 +3,8 @@ const std = @import("std");
 const client = @import("client.zig");
 const uring = @import("uring.zig");
 
+pub const BufferError = error{ZeroBroadcast};
+
 pub const BufferType = union(enum) {
     Broadcast,
     Oneshot,
@@ -37,7 +39,7 @@ pub fn Buffer(comptime size: comptime_int) type {
             ring: *uring.Ring,
             clients: []client.ClientSlot,
             len: usize,
-        ) void {
+        ) !void {
             self.t = .Broadcast;
             self.size = len;
             self.ref_count = 0;
@@ -50,6 +52,8 @@ pub fn Buffer(comptime size: comptime_int) type {
                     self.ref_count += 1;
                 }
             }
+
+            if (self.ref_count == 0) return BufferError.ZeroBroadcast;
         }
     };
 }

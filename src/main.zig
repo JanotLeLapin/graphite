@@ -323,16 +323,17 @@ pub fn main() !void {
                 std.log.debug("keepalive", .{});
 
                 if (buffer_pool.allocBuf()) |b| {
-                    {
-                        errdefer ctx.buffer_pool.releaseBuf(b.idx);
+                    errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
-                        const size = packet.ClientPlayKeepAlive.encode(
-                            &.{ .id = packet.types.VarInt{ .value = 67 } },
-                            &b.data,
-                        ).?;
+                    const size = packet.ClientPlayKeepAlive.encode(
+                        &.{ .id = packet.types.VarInt{ .value = 67 } },
+                        &b.data,
+                    ).?;
 
-                        b.prepareBroadcast(&ring, client_manager.lookup.items, size);
-                    }
+                    b.prepareBroadcast(&ring, client_manager.lookup.items, size) catch {
+                        ctx.buffer_pool.releaseBuf(b.idx);
+                        continue;
+                    };
 
                     const sqe = try ring.getSqe();
                     sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
