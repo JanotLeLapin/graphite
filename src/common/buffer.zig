@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const client = @import("client.zig");
 const uring = @import("uring.zig");
 
 pub const BufferType = union(enum) {
@@ -14,13 +15,41 @@ pub fn Buffer(comptime size: comptime_int) type {
         data: [size]u8,
         size: usize,
 
-        pub fn prepareOneshot(self: *@This(), ring: *uring.Ring, fd: i32, len: usize) !void {
+        ref_count: usize,
+
+        pub fn prepareOneshot(
+            self: *@This(),
+            ring: *uring.Ring,
+            fd: i32,
+            len: usize,
+        ) !void {
             self.t = .Oneshot;
             self.size = len;
+            self.ref_count = 1;
 
             var sqe = try ring.getSqe();
             sqe.prep_write(fd, self.data[0..len], 0);
             sqe.user_data = @bitCast(uring.Userdata{ .op = .Write, .d = @intCast(self.idx), .fd = fd });
+        }
+
+        pub fn prepareBroadcast(
+            self: *@This(),
+            ring: *uring.Ring,
+            clients: []client.ClientSlot,
+            len: usize,
+        ) void {
+            self.t = .Broadcast;
+            self.size = len;
+            self.ref_count = 0;
+
+            for (clients) |slot| {
+                if (slot.client) |c| {
+                    self.ref_count += 1;
+                    var sqe = ring.getSqe() catch break;
+                    sqe.prep_write(c.fd, self.data[0..len], 0);
+                    sqe.user_data = @bitCast(uring.Userdata{ .op = .Write, .d = @intCast(self.idx), .fd = c.fd });
+                }
+            }
         }
     };
 }

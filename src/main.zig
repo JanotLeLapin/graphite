@@ -301,20 +301,16 @@ pub fn main() !void {
             .Timer => {
                 std.log.debug("keepalive", .{});
 
-                for (client_manager.lookup.items) |slot| {
-                    if (slot.client) |client| {
-                        if (buffer_pool.allocBuf()) |b| {
-                            {
-                                errdefer ctx.buffer_pool.releaseBuf(b.idx);
+                if (buffer_pool.allocBuf()) |b| {
+                    {
+                        errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
-                                const size = packet.ClientPlayKeepAlive.encode(
-                                    &.{ .id = packet.types.VarInt{ .value = 67 } },
-                                    &b.data,
-                                ).?;
+                        const size = packet.ClientPlayKeepAlive.encode(
+                            &.{ .id = packet.types.VarInt{ .value = 67 } },
+                            &b.data,
+                        ).?;
 
-                                try b.prepareOneshot(&ring, client.fd, size);
-                            }
-                        }
+                        b.prepareBroadcast(&ring, client_manager.lookup.items, size);
                     }
                 }
 
@@ -359,11 +355,9 @@ pub fn main() !void {
             .Write => {
                 const b = &ctx.buffer_pool.buffers[@intCast(ud.d)];
 
-                switch (b.t) {
-                    .Oneshot => {
-                        ctx.buffer_pool.releaseBuf(@intCast(ud.d));
-                    },
-                    else => {},
+                b.ref_count -= 1;
+                if (0 == b.ref_count) {
+                    ctx.buffer_pool.releaseBuf(@intCast(ud.d));
                 }
             },
         }
