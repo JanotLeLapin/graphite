@@ -146,8 +146,9 @@ fn processPacket(
 }
 
 fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
+    var global_offset: usize = 0;
     while (true) {
-        var offset: usize = 0;
+        var offset = global_offset;
 
         const len = packet.types.VarInt.decode(client.read_buf[offset..client.read_buf_tail]) orelse break;
         offset += len.len;
@@ -156,10 +157,12 @@ fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
             break;
         }
 
-        const id = packet.types.VarInt.decode(client.read_buf[offset..client.read_buf_tail]) orelse break;
+        const packet_end = offset + @as(usize, @intCast(len.value));
+
+        const id = packet.types.VarInt.decode(client.read_buf[offset..packet_end]) orelse break;
         offset += id.len;
 
-        if (packet.ServerBoundPacket.decode(client.state, id.value, client.read_buf[offset..client.read_buf_tail])) |p| {
+        if (packet.ServerBoundPacket.decode(client.state, id.value, client.read_buf[offset..packet_end])) |p| {
             processPacket(ctx, client, p) catch |e| {
                 std.log.debug("client: {d}, failed to process packet with id {x}: {s}", .{ client.fd, id.value, @errorName(e) });
             };
@@ -167,10 +170,11 @@ fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
             std.log.debug("client: {d}, unknown packet with id: {x}", .{ client.fd, id.value });
         }
 
-        const total_len = @as(usize, @intCast(len.value)) + len.len;
-        @memmove(client.read_buf[0..(client.read_buf_tail - total_len)], client.read_buf[total_len..client.read_buf_tail]);
-        client.read_buf_tail -= total_len;
+        global_offset = packet_end;
     }
+
+    @memmove(client.read_buf[0..(client.read_buf_tail - global_offset)], client.read_buf[global_offset..client.read_buf_tail]);
+    client.read_buf_tail = client.read_buf_tail - global_offset;
 }
 
 fn createSig() !i32 {
