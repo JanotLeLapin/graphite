@@ -8,17 +8,22 @@ pub const DefaultModuleError = error{
 };
 
 pub const DefaultModule = struct {
+    some_counter: usize,
+
     pub fn init(_: std.mem.Allocator) !DefaultModule {
-        return DefaultModule{};
+        return DefaultModule{
+            .some_counter = 0,
+        };
     }
 
     pub fn deinit(_: *DefaultModule) !void {}
 
     pub fn onJoin(
-        // _: *DefaultModule,
+        self: *DefaultModule,
         ctx: *common.Context,
         client: *common.client.Client,
     ) !void {
+        self.some_counter += 1;
         if (ctx.buffer_pool.allocBuf()) |b| {
             errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
@@ -27,8 +32,8 @@ pub const DefaultModule = struct {
                 &.{
                     .json = try std.fmt.bufPrint(
                         json[0..],
-                        "{{\"text\":\"{s} joined the game.\",\"color\":\"yellow\"}}",
-                        .{client.username.items},
+                        "{{\"text\":\"{s} joined the game, {d}.\",\"color\":\"yellow\"}}",
+                        .{ client.username.items, self.some_counter },
                     ),
                     .position = .Chat,
                 },

@@ -17,12 +17,12 @@ fn dispatch(
     comptime method_name: []const u8,
     args: anytype,
 ) void {
-    inline for (&ctx.module_registry.instances) |*instance| {
-        const ModuleType = @TypeOf(instance.*);
+    inline for (Modules) |ModuleType| {
+        const instance = ctx.module_registry.get(ModuleType);
 
         if (@hasDecl(ModuleType, method_name)) {
             const method = @field(ModuleType, method_name);
-            const call_args = .{ctx} ++ args;
+            const call_args = .{ instance, ctx } ++ args;
             const result = @call(.auto, method, call_args);
 
             const ReturnType = @typeInfo(@TypeOf(result));

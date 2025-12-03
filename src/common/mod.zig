@@ -20,7 +20,7 @@ pub const ModuleRegistry = struct {
 
     pub fn get(self: *ModuleRegistry, comptime T: type) *T {
         const index = comptime findIndex(T);
-        return self.instances[index];
+        return &self.instances[index];
     }
 
     pub fn findIndex(comptime T: type) usize {
