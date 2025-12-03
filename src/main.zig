@@ -147,23 +147,19 @@ fn processPacket(
 
 fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
     while (true) {
-        if (client.read_buf_tail == 0) {
-            break;
-        }
-
         var offset: usize = 0;
 
-        const len = packet.types.VarInt.decode(&client.read_buf) orelse break;
+        const len = packet.types.VarInt.decode(client.read_buf[offset..client.read_buf_tail]) orelse break;
         offset += len.len;
 
-        if (client.read_buf_tail - offset > len.value) {
+        if (client.read_buf_tail - offset < len.value) {
             break;
         }
 
-        const id = packet.types.VarInt.decode(client.read_buf[offset..]) orelse break;
+        const id = packet.types.VarInt.decode(client.read_buf[offset..client.read_buf_tail]) orelse break;
         offset += id.len;
 
-        if (packet.ServerBoundPacket.decode(client.state, id.value, client.read_buf[offset..])) |p| {
+        if (packet.ServerBoundPacket.decode(client.state, id.value, client.read_buf[offset..client.read_buf_tail])) |p| {
             processPacket(ctx, client, p) catch |e| {
                 std.log.debug("client: {d}, failed to process packet with id {x}: {s}", .{ client.fd, id.value, @errorName(e) });
             };
