@@ -44,10 +44,10 @@ pub fn Buffer(comptime size: comptime_int) type {
 
             for (clients) |slot| {
                 if (slot.client) |c| {
-                    self.ref_count += 1;
                     var sqe = ring.getSqe() catch break;
                     sqe.prep_write(c.fd, self.data[0..len], 0);
                     sqe.user_data = @bitCast(uring.Userdata{ .op = .Write, .d = @intCast(self.idx), .fd = c.fd });
+                    self.ref_count += 1;
                 }
             }
         }
