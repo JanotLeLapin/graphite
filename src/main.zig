@@ -46,7 +46,7 @@ const PacketProcessingError = error{
 };
 
 fn processPacket(
-    ctx: common.Context,
+    ctx: *common.Context,
     client: *common.client.Client,
     p: packet.ServerBoundPacket,
 ) !void {
@@ -145,7 +145,7 @@ fn processPacket(
     }
 }
 
-fn splitPackets(ctx: common.Context, client: *common.client.Client) void {
+fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
     while (true) {
         if (client.read_buf_tail == 0) {
             break;
@@ -240,7 +240,7 @@ pub fn main() !void {
     var buffer_pool = try common.buffer.BufferPool(4096, 64).init(gpa.allocator());
     defer buffer_pool.deinit();
 
-    const ctx = common.Context{
+    var ctx = common.Context{
         .client_manager = client_manager,
         .ring = &ring,
         .buffer_pool = &buffer_pool,
@@ -343,7 +343,7 @@ pub fn main() !void {
                     client_manager.get(cfd).?.read_buf[client.read_buf_tail - bytes .. client.read_buf_tail],
                 });
 
-                splitPackets(ctx, client);
+                splitPackets(&ctx, client);
 
                 const sqe = try ring.getSqe();
                 sqe.opcode = std.os.linux.IORING_OP.READ;
