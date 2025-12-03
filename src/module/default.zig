@@ -22,9 +22,14 @@ pub const DefaultModule = struct {
         if (ctx.buffer_pool.allocBuf()) |b| {
             errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
+            var json: [128]u8 = undefined;
             const size = packet.ClientPlayChatMessage.encode(
                 &.{
-                    .json = "{\"text\":\"welcome!\"}",
+                    .json = try std.fmt.bufPrint(
+                        json[0..],
+                        "{{\"text\":\"{s} joined the game.\",\"color\":\"yellow\"}}",
+                        .{client.username.items},
+                    ),
                     .position = .Chat,
                 },
                 &b.data,
