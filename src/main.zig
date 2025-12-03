@@ -261,7 +261,7 @@ pub fn main() !void {
     defer buffer_pool.deinit();
 
     var ctx = common.Context{
-        .client_manager = client_manager,
+        .client_manager = &client_manager,
         .ring = &ring,
         .buffer_pool = &buffer_pool,
         .module_registry = try common.ModuleRegistry.init(gpa.allocator()),
