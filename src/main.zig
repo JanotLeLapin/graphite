@@ -332,7 +332,6 @@ pub fn main() !void {
 
                     b.prepareBroadcast(&ring, client_manager.lookup.items, size) catch {
                         ctx.buffer_pool.releaseBuf(b.idx);
-                        continue;
                     };
 
                     const sqe = try ring.getSqe();
