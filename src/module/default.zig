@@ -34,7 +34,7 @@ pub const DefaultModule = struct {
                 },
                 &b.data,
             ) orelse return DefaultModuleError.EncodingFailure;
-            try b.prepareOneshot(ctx.ring, client.fd, size);
+            try b.prepareBroadcast(ctx.ring, ctx.client_manager.lookup.items, size);
             _ = try ctx.ring.submit();
         }
     }
