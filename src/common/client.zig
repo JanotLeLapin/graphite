@@ -20,10 +20,16 @@ pub const Client = struct {
     uuid: Uuid,
 };
 
+pub const ClientSlot = struct {
+    client: ?*Client,
+    generation: u64,
+};
+
 pub const ClientManager = struct {
-    lookup: std.ArrayList(?*Client),
+    lookup: std.ArrayList(ClientSlot),
     lookup_alloc: std.mem.Allocator,
     client_alloc: std.mem.Allocator,
+    global_generation: u64,
 
     pub fn init(
         initCap: usize,
@@ -31,15 +37,16 @@ pub const ClientManager = struct {
         client_alloc: std.mem.Allocator,
     ) !ClientManager {
         return ClientManager{
-            .lookup = try std.ArrayList(?*Client).initCapacity(lookup_alloc, initCap),
+            .lookup = try std.ArrayList(ClientSlot).initCapacity(lookup_alloc, initCap),
             .lookup_alloc = lookup_alloc,
             .client_alloc = client_alloc,
+            .global_generation = 0,
         };
     }
 
     pub fn deinit(self: *ClientManager) void {
         for (self.lookup.items) |item| {
-            if (item) |client| {
+            if (item.client) |client| {
                 self.client_alloc.destroy(client);
             }
         }
@@ -56,19 +63,27 @@ pub const ClientManager = struct {
             return null;
         }
 
-        return self.lookup.items[ufd];
+        return self.lookup.items[ufd].client;
     }
 
     pub fn add(self: *ClientManager, fd: i32) !*Client {
         const ufd: usize = @intCast(fd);
         if (ufd >= self.lookup.items.len) {
-            try self.lookup.appendNTimes(self.lookup_alloc, null, ufd - self.lookup.items.len + 1);
+            try self.lookup.appendNTimes(self.lookup_alloc, .{
+                .client = null,
+                .generation = 0,
+            }, ufd - self.lookup.items.len + 1);
         }
 
         const client = try self.client_alloc.create(Client);
         client.fd = fd;
         client.read_buf_tail = 0;
-        self.lookup.items[ufd] = client;
+        self.lookup.items[ufd] = .{
+            .client = client,
+            .generation = self.global_generation,
+        };
+
+        self.global_generation += 1;
 
         return client;
     }
@@ -83,9 +98,9 @@ pub const ClientManager = struct {
             return;
         }
 
-        if (self.lookup.items[ufd]) |conn| {
+        if (self.lookup.items[ufd].client) |conn| {
             self.client_alloc.destroy(conn);
-            self.lookup.items[ufd] = null;
+            self.lookup.items[ufd].client = null;
         }
     }
 };
