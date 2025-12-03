@@ -301,6 +301,23 @@ pub fn main() !void {
             .Timer => {
                 std.log.debug("keepalive", .{});
 
+                for (client_manager.lookup.items) |slot| {
+                    if (slot.client) |client| {
+                        if (buffer_pool.allocBuf()) |b| {
+                            {
+                                errdefer ctx.buffer_pool.releaseBuf(b.idx);
+
+                                const size = packet.ClientPlayKeepAlive.encode(
+                                    &.{ .id = packet.types.VarInt{ .value = 67 } },
+                                    &b.data,
+                                ).?;
+
+                                try b.prepareOneshot(&ring, client.fd, size);
+                            }
+                        }
+                    }
+                }
+
                 const sqe = try ring.getSqe();
                 sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
                 sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Timer, .d = 0, .fd = 0 });
