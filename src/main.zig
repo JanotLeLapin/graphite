@@ -296,12 +296,12 @@ pub fn main() !void {
 
                         b.prepareBroadcast(&ring, client_manager.lookup.items, size);
                     }
-                }
 
-                const sqe = try ring.getSqe();
-                sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
-                sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Timer, .d = 0, .fd = 0 });
-                _ = try ring.submit();
+                    const sqe = try ring.getSqe();
+                    sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
+                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Timer, .d = 0, .fd = 0 });
+                    _ = try ring.submit();
+                }
             },
             .Read => {
                 const cfd = ud.fd;
