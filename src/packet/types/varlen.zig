@@ -4,10 +4,14 @@ pub fn Varlen(comptime T: type, comptime n: usize) type {
     const ShiftType = std.math.Log2Int(T);
     return struct {
         value: T,
-        len: usize,
 
-        pub fn decode(buf: []const u8) ?@This() {
-            var res = @This(){
+        const DecodedType = struct {
+            value: T,
+            len: usize,
+        };
+
+        pub fn decode(buf: []const u8) ?DecodedType {
+            var res = DecodedType{
                 .value = 0,
                 .len = 0,
             };

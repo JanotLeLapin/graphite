@@ -70,7 +70,7 @@ fn genDecodeBasic(comptime T: anytype) fn ([]const u8) ?T {
                     },
                     .@"struct" => {
                         const val = FieldType.decode(rem) orelse return null;
-                        @field(res, field.name) = val;
+                        @field(res, field.name).value = val.value;
                         offset += val.len;
                     },
                     else => {
