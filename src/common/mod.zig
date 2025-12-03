@@ -16,12 +16,12 @@ pub const Uuid = struct {
     }
 
     pub fn stringify(self: Uuid, buf: *[36]u8) void {
-        _ = std.fmt.bufPrint(buf, "{x}-{x}-{x}-{x}-{x}", .{
-            std.mem.readInt(u32, self.bytes[0..4], .little),
-            std.mem.readInt(u16, self.bytes[4..6], .little),
-            std.mem.readInt(u16, self.bytes[6..8], .little),
-            std.mem.readInt(u16, self.bytes[8..10], .little),
-            std.mem.readInt(u48, self.bytes[10..16], .little),
+        _ = std.fmt.bufPrint(buf, "{s}-{s}-{s}-{s}-{s}", .{
+            std.fmt.bytesToHex(self.bytes[0..4], .lower),
+            std.fmt.bytesToHex(self.bytes[4..6], .lower),
+            std.fmt.bytesToHex(self.bytes[6..8], .lower),
+            std.fmt.bytesToHex(self.bytes[8..10], .lower),
+            std.fmt.bytesToHex(self.bytes[10..16], .lower),
         }) catch unreachable;
     }
 };
