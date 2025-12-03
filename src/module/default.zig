@@ -15,7 +15,7 @@ pub const DefaultModule = struct {
     pub fn deinit(_: *DefaultModule) !void {}
 
     pub fn onJoin(
-        _: *DefaultModule,
+        // _: *DefaultModule,
         ctx: *common.Context,
         client: *common.client.Client,
     ) !void {
@@ -30,6 +30,7 @@ pub const DefaultModule = struct {
                 &b.data,
             ) orelse return DefaultModuleError.EncodingFailure;
             try b.prepareOneshot(ctx.ring, client.fd, size);
+            _ = try ctx.ring.submit();
         }
     }
 };

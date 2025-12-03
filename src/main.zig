@@ -12,6 +12,36 @@ pub const Modules = .{
     @import("module/default.zig").DefaultModule,
 };
 
+fn dispatch(
+    ctx: *common.Context,
+    comptime method_name: []const u8,
+    args: anytype,
+) void {
+    inline for (&ctx.module_registry.instances) |*instance| {
+        const ModuleType = @TypeOf(instance.*);
+
+        if (@hasDecl(ModuleType, method_name)) {
+            const method = @field(ModuleType, method_name);
+            const call_args = .{ctx} ++ args;
+            const result = @call(.auto, method, call_args);
+
+            const ReturnType = @typeInfo(@TypeOf(result));
+            if (ReturnType == .error_union) {
+                result catch |e| {
+                    std.log.err(
+                        "module {s}: {s}: {s}",
+                        .{
+                            @typeName(ModuleType),
+                            method_name,
+                            @errorName(e),
+                        },
+                    );
+                };
+            }
+        }
+    }
+}
+
 pub fn log(
     comptime message_level: std.log.Level,
     comptime scope: @Type(.enum_literal),
@@ -123,18 +153,11 @@ fn processPacket(
 
                     try b.prepareOneshot(ctx.ring, client.fd, offset);
                     client.state = .Play;
-
-                    inline for (Modules, 0..) |ModuleType, i| {
-                        var instance = ctx.module_registry.instances[i];
-                        if (@hasDecl(ModuleType, "onJoin")) {
-                            instance.onJoin(ctx, client) catch |e| {
-                                std.log.err("module {s}: onJoin: {s}", .{ @typeName(ModuleType), @errorName(e) });
-                            };
-                        }
-                    }
                 }
 
                 _ = try ctx.ring.submit();
+
+                dispatch(ctx, "onJoin", .{client});
             } else {
                 return;
             }
