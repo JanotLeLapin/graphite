@@ -177,6 +177,41 @@ fn splitPackets(ctx: common.Context, client: *common.client.Client) void {
     }
 }
 
+fn createSig() !i32 {
+    var sigmask = std.posix.sigemptyset();
+    std.posix.sigaddset(&sigmask, std.posix.SIG.INT);
+    std.posix.sigprocmask(std.posix.SIG.BLOCK, &sigmask, null);
+
+    const sigfd = try std.posix.signalfd(-1, &sigmask, 0);
+    return sigfd;
+}
+
+fn createTimer() !i32 {
+    var timerspec = std.mem.zeroes(std.os.linux.itimerspec);
+    timerspec.it_interval.sec = 10;
+    timerspec.it_value.sec = 5;
+
+    const timer_fd = try std.posix.timerfd_create(std.posix.timerfd_clockid_t.MONOTONIC, std.os.linux.TFD{});
+    try std.posix.timerfd_settime(timer_fd, std.os.linux.TFD.TIMER{}, &timerspec, null);
+    return timer_fd;
+}
+
+fn createServer() !i32 {
+    const server_fd = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.STREAM, 0);
+
+    const addr_in = try std.net.Address.parseIp4(ADDRESS, PORT);
+    try std.posix.setsockopt(
+        server_fd,
+        std.posix.SOL.SOCKET,
+        std.posix.SO.REUSEADDR,
+        &std.mem.toBytes(@as(c_int, 1)),
+    );
+    try std.posix.bind(server_fd, &addr_in.any, addr_in.getOsSockLen());
+    try std.posix.listen(server_fd, 128);
+
+    return server_fd;
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
@@ -184,31 +219,18 @@ pub fn main() !void {
     var client_manager = try common.client.ClientManager.init(8, gpa.allocator(), gpa.allocator());
     defer client_manager.deinit();
 
-    var sigmask = std.posix.sigemptyset();
-    std.posix.sigaddset(&sigmask, std.posix.SIG.INT);
-    std.posix.sigprocmask(std.posix.SIG.BLOCK, &sigmask, null);
-
-    var timerspec = std.mem.zeroes(std.os.linux.itimerspec);
-    timerspec.it_interval.sec = 10;
-    timerspec.it_value.sec = 5;
-
-    const sigfd = try std.posix.signalfd(-1, &sigmask, 0);
-    defer std.posix.close(sigfd);
+    const sig_fd = try createSig();
+    defer std.posix.close(sig_fd);
     var siginfo: std.posix.siginfo_t = undefined;
 
-    const timer_fd = try std.posix.timerfd_create(std.posix.timerfd_clockid_t.MONOTONIC, std.os.linux.TFD{});
+    const timer_fd = try createTimer();
     defer std.posix.close(timer_fd);
-    try std.posix.timerfd_settime(timer_fd, std.os.linux.TFD.TIMER{}, &timerspec, null);
     var tinfo: u64 = 0;
 
-    const server_fd = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.STREAM, 0);
+    const server_fd = try createServer();
     defer std.posix.close(server_fd);
-
-    const addr_in = try std.net.Address.parseIp4(ADDRESS, PORT);
-
-    try std.posix.setsockopt(server_fd, std.posix.SOL.SOCKET, std.posix.SO.REUSEADDR, &std.mem.toBytes(@as(c_int, 1)));
-    try std.posix.bind(server_fd, &addr_in.any, addr_in.getOsSockLen());
-    try std.posix.listen(server_fd, 128);
+    var addr: std.os.linux.sockaddr = undefined;
+    var addr_len: std.os.linux.socklen_t = @sizeOf(@TypeOf(addr));
 
     std.log.info("server listening on port {d}.", .{PORT});
 
@@ -222,12 +244,7 @@ pub fn main() !void {
         .client_manager = client_manager,
         .ring = &ring,
         .buffer_pool = &buffer_pool,
-        .server_fd = server_fd,
-        .timer_fd = timer_fd,
     };
-
-    var addr: std.os.linux.sockaddr = undefined;
-    var addr_len: std.os.linux.socklen_t = @sizeOf(@TypeOf(addr));
 
     {
         const sqe = try ring.getSqe();
@@ -237,7 +254,7 @@ pub fn main() !void {
 
     {
         const sqe = try ring.getSqe();
-        sqe.prep_read(sigfd, @ptrCast(&siginfo), 0);
+        sqe.prep_read(sig_fd, @ptrCast(&siginfo), 0);
         sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Sigint, .d = 0, .fd = 0 });
     }
 
