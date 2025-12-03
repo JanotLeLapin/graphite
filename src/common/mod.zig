@@ -29,7 +29,8 @@ pub const Uuid = struct {
 pub const Context = struct {
     client_manager: client.ClientManager,
     ring: *uring.Ring,
-    server_fd: i32,
-
     buffer_pool: *buffer.BufferPool(4096, 64),
+
+    server_fd: i32,
+    timer_fd: i32,
 };

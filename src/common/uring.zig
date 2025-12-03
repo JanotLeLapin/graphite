@@ -3,6 +3,7 @@ const std = @import("std");
 pub const UserdataOp = enum(u4) {
     Accept,
     Sigint,
+    Timer,
     Read,
     Write,
 };
