@@ -63,14 +63,14 @@ pub fn BufferPool(comptime buf_size: comptime_int, comptime cap: comptime_int) t
 
     return struct {
         idx_stack: [cap]usize,
-        available_count: usize,
+        busy_count: usize,
         buffers: []B,
         buf_alloc: std.mem.Allocator,
 
         pub fn init(buf_alloc: std.mem.Allocator) !@This() {
             var res = @This(){
                 .idx_stack = undefined,
-                .available_count = cap,
+                .busy_count = 0,
                 .buffers = try buf_alloc.alloc(B, cap),
                 .buf_alloc = buf_alloc,
             };
@@ -84,18 +84,18 @@ pub fn BufferPool(comptime buf_size: comptime_int, comptime cap: comptime_int) t
         }
 
         pub fn allocBuf(self: *@This()) ?*B {
-            if (self.available_count <= 0) {
+            if (self.busy_count >= cap) {
                 return null;
             }
 
-            self.available_count -= 1;
-            const idx = self.idx_stack[self.available_count];
+            const idx = self.idx_stack[self.busy_count];
+            self.busy_count += 1;
             return &self.buffers[idx];
         }
 
         pub fn releaseBuf(self: *@This(), idx: usize) void {
-            self.idx_stack[self.available_count] = idx;
-            self.available_count += 1;
+            self.busy_count -= 1;
+            self.idx_stack[self.busy_count] = idx;
         }
 
         pub fn deinit(self: *@This()) void {
