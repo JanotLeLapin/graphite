@@ -190,8 +190,6 @@ fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
             processPacket(ctx, client, p) catch |e| {
                 std.log.debug("client: {d}, failed to process packet with id {x}: {s}", .{ client.fd, id.value, @errorName(e) });
             };
-        } else {
-            std.log.debug("client: {d}, unknown packet with id: {x}", .{ client.fd, id.value });
         }
 
         global_offset = packet_end;
@@ -362,12 +360,6 @@ pub fn main() !void {
 
                 const client = client_manager.get(cfd).?;
                 client.read_buf_tail += bytes;
-
-                std.log.debug("client: {d}, read {d} bytes: {any}", .{
-                    cfd,
-                    bytes,
-                    client_manager.get(cfd).?.read_buf[client.read_buf_tail - bytes .. client.read_buf_tail],
-                });
 
                 splitPackets(&ctx, client);
 
