@@ -59,10 +59,10 @@ pub const WordleModule = struct {
 
                 var buf: [256]u8 = undefined;
 
-                const size = packet.ClientPlayChatMessage.encode(&.{
+                var offset = packet.ClientPlayChatMessage.encode(&.{
                     .json = try std.fmt.bufPrint(
                         &buf,
-                        "{{\"text\":\"\",\"extra\":[{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}}]}}",
+                        "{{\"text\":\"guess: \",\"extra\":[{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}}]}}",
                         .{
                             message[0],
                             statuses[0].getColor(),
@@ -78,7 +78,15 @@ pub const WordleModule = struct {
                     ),
                     .position = .System,
                 }, &b.data) orelse return WordleModuleError.EncodingFailure;
-                try b.prepareOneshot(ctx.ring, client.fd, size);
+
+                if (std.mem.eql(CharStatus, &statuses, &.{ .SpotOn, .SpotOn, .SpotOn, .SpotOn, .SpotOn })) {
+                    offset += packet.ClientPlayChatMessage.encode(&.{
+                        .json = "{\"text\":\"good guess!\",\"color\":\"green\"}",
+                        .position = .System,
+                    }, b.data[offset..]) orelse return WordleModuleError.EncodingFailure;
+                }
+
+                try b.prepareOneshot(ctx.ring, client.fd, offset);
             }
             _ = try ctx.ring.submit();
         }
