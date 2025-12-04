@@ -22,10 +22,21 @@ pub const WordleModuleError = error{EncodingFailure};
 pub const WordleModule = struct {
     word: [5]u8,
 
-    pub fn init(_: std.mem.Allocator) !WordleModule {
-        var self = WordleModule{ .word = undefined };
+    winners: std.ArrayList(i32),
+    alloc: std.mem.Allocator,
+
+    pub fn init(alloc: std.mem.Allocator) !WordleModule {
+        var self = WordleModule{
+            .word = undefined,
+            .winners = try std.ArrayList(i32).initCapacity(alloc, 8),
+            .alloc = alloc,
+        };
         @memcpy(self.word[0..5], "kitty");
         return self;
+    }
+
+    pub fn deinit(self: *WordleModule) void {
+        self.winners.deinit(self.alloc);
     }
 
     pub fn onChatMessage(
@@ -34,6 +45,12 @@ pub const WordleModule = struct {
         client: *common.client.Client,
         message: []const u8,
     ) !void {
+        for (self.winners.items) |fd| {
+            if (fd == client.fd) {
+                return;
+            }
+        }
+
         if (message.len < 5) {
             return;
         }
@@ -80,6 +97,7 @@ pub const WordleModule = struct {
                 }, &b.data) orelse return WordleModuleError.EncodingFailure;
 
                 if (std.mem.eql(CharStatus, &statuses, &.{ .SpotOn, .SpotOn, .SpotOn, .SpotOn, .SpotOn })) {
+                    try self.winners.append(self.alloc, client.fd);
                     offset += packet.ClientPlayChatMessage.encode(&.{
                         .json = "{\"text\":\"good guess!\",\"color\":\"green\"}",
                         .position = .System,
