@@ -86,8 +86,8 @@ fn processPacket(
     p: packet.ServerBoundPacket,
 ) !void {
     switch (p) {
-        .Handshake => client.state = @enumFromInt(p.Handshake.next_state),
-        .StatusRequest => {
+        .handshake => client.state = @enumFromInt(p.handshake.next_state),
+        .status_request => {
             const b = try ctx.buffer_pool.allocBuf();
             {
                 errdefer ctx.buffer_pool.releaseBuf(b.idx);
@@ -101,22 +101,22 @@ fn processPacket(
             }
             _ = try ctx.ring.submit();
         },
-        .StatusPing => {
+        .status_ping => {
             const b = try ctx.buffer_pool.allocBuf();
             {
                 errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
                 b.data[0] = 9;
                 b.data[1] = 0x01;
-                @memcpy(b.data[2..10], @as([]const u8, @ptrCast(&p.StatusPing.payload)));
+                @memcpy(b.data[2..10], @as([]const u8, @ptrCast(&p.status_ping.payload)));
 
                 try b.prepareOneshot(ctx.ring, client.fd, 10);
             }
             _ = try ctx.ring.submit();
         },
-        .LoginStart => {
+        .login_start => {
             client.username = std.ArrayListUnmanaged(u8).initBuffer(&client.username_buf);
-            client.username.appendSliceBounded(p.LoginStart.username[0..@min(p.LoginStart.username.len, client.username_buf.len - 1)]) catch unreachable;
+            client.username.appendSliceBounded(p.login_start.username[0..@min(p.login_start.username.len, client.username_buf.len - 1)]) catch unreachable;
 
             var uuid_buf: [36]u8 = undefined;
             client.uuid = common.Uuid.random(std.crypto.random);
@@ -137,9 +137,9 @@ fn processPacket(
 
                 offset += packet.ClientPlayJoinGame.encode(&.{
                     .eid = 0,
-                    .gamemode = .Survival,
-                    .dimension = .Overworld,
-                    .difficulty = .Normal,
+                    .gamemode = .survival,
+                    .dimension = .overworld,
+                    .difficulty = .normal,
                     .max_players = 20,
                     .level_type = "default",
                     .reduced_debug_info = 0,
@@ -155,14 +155,14 @@ fn processPacket(
                 }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
 
                 try b.prepareOneshot(ctx.ring, client.fd, offset);
-                client.state = .Play;
+                client.state = .play;
             }
 
             _ = try ctx.ring.submit();
 
             dispatch(ctx, "onJoin", .{client});
         },
-        .PlayChatMessage => |pd| {
+        .play_chat_message => |pd| {
             dispatch(ctx, "onChatMessage", .{ client, pd.message });
         },
         else => {},
@@ -275,19 +275,19 @@ pub fn main() !void {
     {
         const sqe = try ring.getSqe();
         sqe.prep_accept(server_fd, &addr, &addr_len, 0);
-        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Accept, .d = 0, .fd = 0 });
+        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .accept, .d = 0, .fd = 0 });
     }
 
     {
         const sqe = try ring.getSqe();
         sqe.prep_read(sig_fd, @ptrCast(&siginfo), 0);
-        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Sigint, .d = 0, .fd = 0 });
+        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .sigint, .d = 0, .fd = 0 });
     }
 
     {
         const sqe = try ring.getSqe();
         sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
-        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Timer, .d = 0, .fd = 0 });
+        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .timer, .d = 0, .fd = 0 });
     }
 
     _ = try ring.submit();
@@ -296,40 +296,40 @@ pub fn main() !void {
         const cqe = try ring.waitCqe();
         const ud: common.uring.Userdata = @bitCast(cqe.user_data);
         switch (ud.op) {
-            .Accept => {
+            .accept => {
                 const cfd = cqe.res;
                 std.log.debug("client: {d} connected", .{cfd});
 
                 var client = try client_manager.add(cfd);
-                client.state = .Handshake;
+                client.state = .handshake;
                 client.addr = addr;
 
                 {
                     const sqe = try ring.getSqe();
                     sqe.opcode = std.os.linux.IORING_OP.ACCEPT;
                     sqe.prep_accept(server_fd, &addr, &addr_len, 0);
-                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.Accept, .d = 0, .fd = cfd });
+                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.accept, .d = 0, .fd = cfd });
                 }
 
                 {
                     const sqe = try ring.getSqe();
                     sqe.opcode = std.os.linux.IORING_OP.READ;
                     sqe.prep_read(cfd, &client_manager.get(cfd).?.read_buf, 0);
-                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.Read, .d = 0, .fd = cfd });
+                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
                 }
 
                 _ = try ring.submit();
             },
-            .Sigint => {
+            .sigint => {
                 std.log.info("caught sigint", .{});
                 break;
             },
-            .Timer => {
+            .timer => {
                 std.log.debug("keepalive", .{});
 
                 const sqe = try ring.getSqe();
                 sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
-                sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Timer, .d = 0, .fd = 0 });
+                sqe.user_data = @bitCast(common.uring.Userdata{ .op = .timer, .d = 0, .fd = 0 });
 
                 const b = try buffer_pool.allocBuf();
 
@@ -343,7 +343,7 @@ pub fn main() !void {
                 };
                 _ = try ring.submit();
             },
-            .Read => {
+            .read => {
                 const cfd = ud.fd;
                 if (cqe.res < 0) {
                     std.log.err("cqe error: {d}", .{cqe.res});
@@ -366,11 +366,11 @@ pub fn main() !void {
                 const sqe = try ring.getSqe();
                 sqe.opcode = std.os.linux.IORING_OP.READ;
                 sqe.prep_read(cfd, client.read_buf[client.read_buf_tail..], 0);
-                sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.Read, .d = 0, .fd = cfd });
+                sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
 
                 _ = try ring.submit();
             },
-            .Write => {
+            .write => {
                 const b = ctx.buffer_pool.buffers[@intCast(ud.d)];
 
                 b.ref_count -= 1;

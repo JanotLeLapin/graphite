@@ -6,8 +6,8 @@ const uring = @import("uring.zig");
 pub const BufferError = error{ZeroBroadcast};
 
 pub const BufferType = union(enum) {
-    Broadcast,
-    Oneshot,
+    broadcast,
+    oneshot,
 };
 
 pub fn Buffer(comptime size: comptime_int) type {
@@ -25,13 +25,13 @@ pub fn Buffer(comptime size: comptime_int) type {
             fd: i32,
             len: usize,
         ) !void {
-            self.t = .Oneshot;
+            self.t = .oneshot;
             self.size = len;
             self.ref_count = 1;
 
             var sqe = try ring.getSqe();
             sqe.prep_write(fd, self.data[0..len], 0);
-            sqe.user_data = @bitCast(uring.Userdata{ .op = .Write, .d = @intCast(self.idx), .fd = fd });
+            sqe.user_data = @bitCast(uring.Userdata{ .op = .write, .d = @intCast(self.idx), .fd = fd });
         }
 
         pub fn prepareBroadcast(
@@ -40,7 +40,7 @@ pub fn Buffer(comptime size: comptime_int) type {
             clients: []client.ClientSlot,
             len: usize,
         ) !void {
-            self.t = .Broadcast;
+            self.t = .broadcast;
             self.size = len;
             self.ref_count = 0;
 
@@ -48,7 +48,7 @@ pub fn Buffer(comptime size: comptime_int) type {
                 if (slot.client) |c| {
                     var sqe = ring.getSqe() catch break;
                     sqe.prep_write(c.fd, self.data[0..len], 0);
-                    sqe.user_data = @bitCast(uring.Userdata{ .op = .Write, .d = @intCast(self.idx), .fd = c.fd });
+                    sqe.user_data = @bitCast(uring.Userdata{ .op = .write, .d = @intCast(self.idx), .fd = c.fd });
                     self.ref_count += 1;
                 }
             }

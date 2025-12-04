@@ -3,10 +3,10 @@ const std = @import("std");
 const Uuid = @import("mod.zig").Uuid;
 
 pub const ClientState = enum(u8) {
-    Handshake = 0,
-    Status = 1,
-    Login = 2,
-    Play = 3,
+    handshake = 0,
+    status = 1,
+    login = 2,
+    play = 3,
 };
 
 pub const Client = struct {

@@ -36,7 +36,7 @@ pub const DefaultModule = struct {
                         "{{\"text\":\"{s} joined the game, {d}.\",\"color\":\"yellow\"}}",
                         .{ client.username.items, self.some_counter },
                     ),
-                    .position = .Chat,
+                    .position = .chat,
                 },
                 &b.data,
             ) orelse return DefaultModuleError.EncodingFailure;

@@ -5,23 +5,23 @@ pub const common = @import("../common/mod.zig");
 pub const types = @import("types/mod.zig");
 
 pub const GamemodeType = enum(u8) {
-    Survival = 0,
-    Creative = 1,
-    Adventure = 2,
-    Spectator = 3,
+    survival = 0,
+    creative = 1,
+    adventure = 2,
+    spectator = 3,
 };
 
 pub const Dimension = enum(i8) {
-    Nether = -1,
-    Overworld = 0,
-    End = 1,
+    nether = -1,
+    overworld = 0,
+    end = 1,
 };
 
 pub const Difficulty = enum(u8) {
-    Peaceful = 0,
-    Easy = 1,
-    Normal = 2,
-    Hard = 3,
+    peaceful = 0,
+    easy = 1,
+    normal = 2,
+    hard = 3,
 };
 
 fn genDecodeBasic(comptime T: anytype) fn ([]const u8) ?T {
@@ -216,15 +216,15 @@ pub const ServerPlayPlayerPositionAndLook = struct {
 };
 
 pub const ServerBoundPacket = union(enum) {
-    Handshake: ServerHandshake,
-    StatusRequest,
-    StatusPing: ServerStatusPing,
-    LoginStart: ServerLoginStart,
-    PlayChatMessage: ServerPlayChatMessage,
-    PlayPlayer: ServerPlayPlayer,
-    PlayPlayerPosition: ServerPlayPlayerPosition,
-    PlayPlayerLook: ServerPlayPlayerLook,
-    PlayPlayerPositionAndLook: ServerPlayPlayerPositionAndLook,
+    handshake: ServerHandshake,
+    status_request,
+    status_ping: ServerStatusPing,
+    login_start: ServerLoginStart,
+    play_chat_message: ServerPlayChatMessage,
+    play_player: ServerPlayPlayer,
+    play_player_position: ServerPlayPlayerPosition,
+    play_player_look: ServerPlayPlayerLook,
+    play_player_position_and_look: ServerPlayPlayerPositionAndLook,
 
     pub fn decode(
         state: common.client.ClientState,
@@ -232,22 +232,22 @@ pub const ServerBoundPacket = union(enum) {
         buf: []const u8,
     ) ?ServerBoundPacket {
         return switch (state) {
-            .Handshake => .{ .Handshake = ServerHandshake.decode(buf) orelse return null },
-            .Status => switch (packet_id) {
-                0x00 => .{ .StatusRequest = undefined },
-                0x01 => .{ .StatusPing = ServerStatusPing.decode(buf) orelse return null },
+            .handshake => .{ .handshake = ServerHandshake.decode(buf) orelse return null },
+            .status => switch (packet_id) {
+                0x00 => .{ .status_request = undefined },
+                0x01 => .{ .status_ping = ServerStatusPing.decode(buf) orelse return null },
                 else => return null,
             },
-            .Login => switch (packet_id) {
-                0x00 => .{ .LoginStart = ServerLoginStart.decode(buf) orelse return null },
+            .login => switch (packet_id) {
+                0x00 => .{ .login_start = ServerLoginStart.decode(buf) orelse return null },
                 else => return null,
             },
-            .Play => switch (packet_id) {
-                0x01 => .{ .PlayChatMessage = ServerPlayChatMessage.decode(buf) orelse return null },
-                0x03 => .{ .PlayPlayer = ServerPlayPlayer.decode(buf) orelse return null },
-                0x04 => .{ .PlayPlayerPosition = ServerPlayPlayerPosition.decode(buf) orelse return null },
-                0x05 => .{ .PlayPlayerLook = ServerPlayPlayerLook.decode(buf) orelse return null },
-                0x06 => .{ .PlayPlayerPositionAndLook = ServerPlayPlayerPositionAndLook.decode(buf) orelse return null },
+            .play => switch (packet_id) {
+                0x01 => .{ .play_chat_message = ServerPlayChatMessage.decode(buf) orelse return null },
+                0x03 => .{ .play_player = ServerPlayPlayer.decode(buf) orelse return null },
+                0x04 => .{ .play_player_position = ServerPlayPlayerPosition.decode(buf) orelse return null },
+                0x05 => .{ .play_player_look = ServerPlayPlayerLook.decode(buf) orelse return null },
+                0x06 => .{ .play_player_position_and_look = ServerPlayPlayerPositionAndLook.decode(buf) orelse return null },
                 else => return null,
             },
         };
@@ -296,9 +296,9 @@ pub const ClientPlayJoinGame = struct {
 pub const ClientPlayChatMessage = struct {
     json: []const u8,
     position: enum(u8) {
-        Chat = 0,
-        System = 1,
-        Hotbar = 2,
+        chat = 0,
+        system = 1,
+        hotbar = 2,
     },
 
     pub fn encode(self: *const @This(), buf: []u8) ?usize {

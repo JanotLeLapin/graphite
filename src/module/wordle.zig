@@ -4,15 +4,15 @@ const common = @import("../common/mod.zig");
 const packet = @import("../packet/mod.zig");
 
 const CharStatus = enum(u2) {
-    Miss = 0,
-    Present = 1,
-    SpotOn = 2,
+    miss = 0,
+    present = 1,
+    spot_on = 2,
 
     fn getColor(self: CharStatus) []const u8 {
         return switch (self) {
-            .Miss => "gray",
-            .Present => "yellow",
-            .SpotOn => "green",
+            .miss => "gray",
+            .present => "yellow",
+            .spot_on => "green",
         };
     }
 };
@@ -58,13 +58,13 @@ pub const WordleModule = struct {
         var statuses = std.mem.zeroes([5]CharStatus);
         for (self.word[0..5], message[0..5], 0..) |wc, mc, i| {
             if (wc == mc) {
-                statuses[i] = .SpotOn;
+                statuses[i] = .spot_on;
                 continue;
             }
 
             for (self.word[0..5]) |wc2| {
                 if (mc == wc2) {
-                    statuses[i] = .Present;
+                    statuses[i] = .present;
                     break;
                 }
             }
@@ -93,14 +93,14 @@ pub const WordleModule = struct {
                         statuses[4].getColor(),
                     },
                 ),
-                .position = .System,
+                .position = .system,
             }, &b.data) orelse return WordleModuleError.EncodingFailure;
 
-            if (std.mem.eql(CharStatus, &statuses, &.{ .SpotOn, .SpotOn, .SpotOn, .SpotOn, .SpotOn })) {
+            if (std.mem.eql(CharStatus, &statuses, &.{ .spot_on, .spot_on, .spot_on, .spot_on, .spot_on })) {
                 try self.winners.append(self.alloc, client.fd);
                 offset += packet.ClientPlayChatMessage.encode(&.{
                     .json = "{\"text\":\"good guess!\",\"color\":\"green\"}",
-                    .position = .System,
+                    .position = .system,
                 }, b.data[offset..]) orelse return WordleModuleError.EncodingFailure;
             }
 

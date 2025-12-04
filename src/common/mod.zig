@@ -3,6 +3,7 @@ const std = @import("std");
 const Modules = @import("root").Modules;
 
 pub const buffer = @import("buffer.zig");
+pub const chat = @import("chat.zig");
 pub const client = @import("client.zig");
 pub const uring = @import("uring.zig");
 
