@@ -58,39 +58,56 @@ pub fn Buffer(comptime size: comptime_int) type {
     };
 }
 
-pub fn BufferPool(comptime buf_size: comptime_int, comptime cap: comptime_int) type {
+pub fn BufferPool(comptime buf_size: comptime_int) type {
     const B = Buffer(buf_size);
 
     return struct {
-        idx_stack: [cap]usize,
+        idx_stack: []usize,
         busy_count: usize,
-        buffers: []B,
-        buf_alloc: std.mem.Allocator,
+        buffers: []*B,
+        alloc: std.mem.Allocator,
 
-        pub fn init(buf_alloc: std.mem.Allocator) !@This() {
-            var res = @This(){
-                .idx_stack = undefined,
+        pub fn init(alloc: std.mem.Allocator, initial_cap: usize) !@This() {
+            const res = @This(){
+                .idx_stack = try alloc.alloc(usize, initial_cap),
                 .busy_count = 0,
-                .buffers = try buf_alloc.alloc(B, cap),
-                .buf_alloc = buf_alloc,
+                .buffers = try alloc.alloc(*B, initial_cap),
+                .alloc = alloc,
             };
 
-            for (&res.idx_stack, res.buffers, 0..) |*idx, *b, i| {
+            for (res.idx_stack, res.buffers, 0..) |*idx, *b, i| {
                 idx.* = i;
-                b.idx = i;
+                b.* = try alloc.create(B);
+                b.*.idx = i;
             }
 
             return res;
         }
 
-        pub fn allocBuf(self: *@This()) ?*B {
-            if (self.busy_count >= cap) {
-                return null;
+        fn resize(self: *@This(), new_size: usize) !void {
+            const old_size = self.buffers.len;
+            self.idx_stack = try self.alloc.realloc(self.idx_stack, new_size);
+            self.buffers = try self.alloc.realloc(self.buffers, new_size);
+
+            for (
+                self.idx_stack[old_size..new_size],
+                self.buffers[old_size..new_size],
+                old_size..new_size,
+            ) |*idx, *b, i| {
+                idx.* = i;
+                b.* = try self.alloc.create(B);
+                b.*.idx = i;
+            }
+        }
+
+        pub fn allocBuf(self: *@This()) !*B {
+            if (self.busy_count >= self.buffers.len) {
+                try self.resize(self.buffers.len * 2);
             }
 
             const idx = self.idx_stack[self.busy_count];
             self.busy_count += 1;
-            return &self.buffers[idx];
+            return self.buffers[idx];
         }
 
         pub fn releaseBuf(self: *@This(), idx: usize) void {
@@ -99,7 +116,11 @@ pub fn BufferPool(comptime buf_size: comptime_int, comptime cap: comptime_int) t
         }
 
         pub fn deinit(self: *@This()) void {
-            self.buf_alloc.free(self.buffers);
+            for (self.buffers) |b| {
+                self.alloc.destroy(b);
+            }
+            self.alloc.free(self.idx_stack);
+            self.alloc.free(self.buffers);
         }
     };
 }

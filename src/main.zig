@@ -87,7 +87,8 @@ fn processPacket(
 ) !void {
     switch (p) {
         .Handshake => client.state = @enumFromInt(p.Handshake.next_state),
-        .StatusRequest => if (ctx.buffer_pool.allocBuf()) |b| {
+        .StatusRequest => {
+            const b = try ctx.buffer_pool.allocBuf();
             {
                 errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
@@ -100,7 +101,8 @@ fn processPacket(
             }
             _ = try ctx.ring.submit();
         },
-        .StatusPing => if (ctx.buffer_pool.allocBuf()) |b| {
+        .StatusPing => {
+            const b = try ctx.buffer_pool.allocBuf();
             {
                 errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
@@ -122,46 +124,43 @@ fn processPacket(
 
             std.log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
 
-            if (ctx.buffer_pool.allocBuf()) |b| {
-                {
-                    errdefer ctx.buffer_pool.releaseBuf(b.idx);
+            const b = try ctx.buffer_pool.allocBuf();
+            {
+                errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
-                    var offset: usize = 0;
+                var offset: usize = 0;
 
-                    offset += packet.ClientLoginSuccess.encode(&.{
-                        .uuid = &uuid_buf,
-                        .username = client.username.items,
-                    }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
+                offset += packet.ClientLoginSuccess.encode(&.{
+                    .uuid = &uuid_buf,
+                    .username = client.username.items,
+                }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
 
-                    offset += packet.ClientPlayJoinGame.encode(&.{
-                        .eid = 0,
-                        .gamemode = .Survival,
-                        .dimension = .Overworld,
-                        .difficulty = .Normal,
-                        .max_players = 20,
-                        .level_type = "default",
-                        .reduced_debug_info = 0,
-                    }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
+                offset += packet.ClientPlayJoinGame.encode(&.{
+                    .eid = 0,
+                    .gamemode = .Survival,
+                    .dimension = .Overworld,
+                    .difficulty = .Normal,
+                    .max_players = 20,
+                    .level_type = "default",
+                    .reduced_debug_info = 0,
+                }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
 
-                    offset += packet.ClientPlayPlayerPositionAndLook.encode(&.{
-                        .x = 0.0,
-                        .y = 67.0,
-                        .z = 0.0,
-                        .yaw = 0.0,
-                        .pitch = 0.0,
-                        .flags = 0,
-                    }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
+                offset += packet.ClientPlayPlayerPositionAndLook.encode(&.{
+                    .x = 0.0,
+                    .y = 67.0,
+                    .z = 0.0,
+                    .yaw = 0.0,
+                    .pitch = 0.0,
+                    .flags = 0,
+                }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
 
-                    try b.prepareOneshot(ctx.ring, client.fd, offset);
-                    client.state = .Play;
-                }
-
-                _ = try ctx.ring.submit();
-
-                dispatch(ctx, "onJoin", .{client});
-            } else {
-                return;
+                try b.prepareOneshot(ctx.ring, client.fd, offset);
+                client.state = .Play;
             }
+
+            _ = try ctx.ring.submit();
+
+            dispatch(ctx, "onJoin", .{client});
         },
         .PlayChatMessage => |pd| {
             dispatch(ctx, "onChatMessage", .{ client, pd.message });
@@ -262,7 +261,7 @@ pub fn main() !void {
     var ring = try common.uring.Ring.init(URING_QUEUE_ENTRIES);
     defer ring.deinit();
 
-    var buffer_pool = try common.buffer.BufferPool(4096, 64).init(gpa.allocator());
+    var buffer_pool = try common.buffer.BufferPool(4096).init(gpa.allocator(), 64);
     defer buffer_pool.deinit();
 
     var module_registry = try common.ModuleRegistry.init(gpa.allocator());
@@ -330,23 +329,21 @@ pub fn main() !void {
             .Timer => {
                 std.log.debug("keepalive", .{});
 
-                if (buffer_pool.allocBuf()) |b| {
-                    errdefer ctx.buffer_pool.releaseBuf(b.idx);
+                const sqe = try ring.getSqe();
+                sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
+                sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Timer, .d = 0, .fd = 0 });
 
-                    const size = packet.ClientPlayKeepAlive.encode(
-                        &.{ .id = packet.types.VarInt{ .value = 67 } },
-                        &b.data,
-                    ).?;
+                const b = try buffer_pool.allocBuf();
 
-                    b.prepareBroadcast(&ring, client_manager.lookup.items, size) catch {
-                        ctx.buffer_pool.releaseBuf(b.idx);
-                    };
+                const size = packet.ClientPlayKeepAlive.encode(
+                    &.{ .id = packet.types.VarInt{ .value = 67 } },
+                    &b.data,
+                ).?;
 
-                    const sqe = try ring.getSqe();
-                    sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
-                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = .Timer, .d = 0, .fd = 0 });
-                    _ = try ring.submit();
-                }
+                b.prepareBroadcast(&ring, client_manager.lookup.items, size) catch {
+                    ctx.buffer_pool.releaseBuf(b.idx);
+                };
+                _ = try ring.submit();
             },
             .Read => {
                 const cfd = ud.fd;
@@ -382,7 +379,7 @@ pub fn main() !void {
                 _ = try ring.submit();
             },
             .Write => {
-                const b = &ctx.buffer_pool.buffers[@intCast(ud.d)];
+                const b = ctx.buffer_pool.buffers[@intCast(ud.d)];
 
                 b.ref_count -= 1;
                 if (0 == b.ref_count) {

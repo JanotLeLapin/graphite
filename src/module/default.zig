@@ -24,7 +24,8 @@ pub const DefaultModule = struct {
         client: *common.client.Client,
     ) !void {
         self.some_counter += 1;
-        if (ctx.buffer_pool.allocBuf()) |b| {
+        const b = try ctx.buffer_pool.allocBuf();
+        {
             errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
             var json: [128]u8 = undefined;
@@ -40,7 +41,7 @@ pub const DefaultModule = struct {
                 &b.data,
             ) orelse return DefaultModuleError.EncodingFailure;
             try b.prepareBroadcast(ctx.ring, ctx.client_manager.lookup.items, size);
-            _ = try ctx.ring.submit();
         }
+        _ = try ctx.ring.submit();
     }
 };

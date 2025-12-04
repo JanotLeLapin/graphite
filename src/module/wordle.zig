@@ -70,43 +70,42 @@ pub const WordleModule = struct {
             }
         }
 
-        if (ctx.buffer_pool.allocBuf()) |b| {
-            {
-                errdefer ctx.buffer_pool.releaseBuf(b.idx);
+        const b = try ctx.buffer_pool.allocBuf();
+        {
+            errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
-                var buf: [256]u8 = undefined;
+            var buf: [256]u8 = undefined;
 
-                var offset = packet.ClientPlayChatMessage.encode(&.{
-                    .json = try std.fmt.bufPrint(
-                        &buf,
-                        "{{\"text\":\"guess: \",\"extra\":[{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}}]}}",
-                        .{
-                            message[0],
-                            statuses[0].getColor(),
-                            message[1],
-                            statuses[1].getColor(),
-                            message[2],
-                            statuses[2].getColor(),
-                            message[3],
-                            statuses[3].getColor(),
-                            message[4],
-                            statuses[4].getColor(),
-                        },
-                    ),
+            var offset = packet.ClientPlayChatMessage.encode(&.{
+                .json = try std.fmt.bufPrint(
+                    &buf,
+                    "{{\"text\":\"guess: \",\"extra\":[{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}}]}}",
+                    .{
+                        message[0],
+                        statuses[0].getColor(),
+                        message[1],
+                        statuses[1].getColor(),
+                        message[2],
+                        statuses[2].getColor(),
+                        message[3],
+                        statuses[3].getColor(),
+                        message[4],
+                        statuses[4].getColor(),
+                    },
+                ),
+                .position = .System,
+            }, &b.data) orelse return WordleModuleError.EncodingFailure;
+
+            if (std.mem.eql(CharStatus, &statuses, &.{ .SpotOn, .SpotOn, .SpotOn, .SpotOn, .SpotOn })) {
+                try self.winners.append(self.alloc, client.fd);
+                offset += packet.ClientPlayChatMessage.encode(&.{
+                    .json = "{\"text\":\"good guess!\",\"color\":\"green\"}",
                     .position = .System,
-                }, &b.data) orelse return WordleModuleError.EncodingFailure;
-
-                if (std.mem.eql(CharStatus, &statuses, &.{ .SpotOn, .SpotOn, .SpotOn, .SpotOn, .SpotOn })) {
-                    try self.winners.append(self.alloc, client.fd);
-                    offset += packet.ClientPlayChatMessage.encode(&.{
-                        .json = "{\"text\":\"good guess!\",\"color\":\"green\"}",
-                        .position = .System,
-                    }, b.data[offset..]) orelse return WordleModuleError.EncodingFailure;
-                }
-
-                try b.prepareOneshot(ctx.ring, client.fd, offset);
+                }, b.data[offset..]) orelse return WordleModuleError.EncodingFailure;
             }
-            _ = try ctx.ring.submit();
+
+            try b.prepareOneshot(ctx.ring, client.fd, offset);
         }
+        _ = try ctx.ring.submit();
     }
 };
