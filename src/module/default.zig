@@ -16,7 +16,7 @@ pub const DefaultModule = struct {
         };
     }
 
-    pub fn deinit(_: *DefaultModule) !void {}
+    pub fn deinit(_: *DefaultModule) void {}
 
     pub fn onJoin(
         self: *DefaultModule,

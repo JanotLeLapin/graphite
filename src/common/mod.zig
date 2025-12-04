@@ -18,6 +18,13 @@ pub const ModuleRegistry = struct {
         return self;
     }
 
+    pub fn deinit(self: *ModuleRegistry) void {
+        inline for (Modules) |ModuleType| {
+            var instance = self.get(ModuleType);
+            instance.deinit();
+        }
+    }
+
     pub fn get(self: *ModuleRegistry, comptime T: type) *T {
         const index = comptime findIndex(T);
         return &self.instances[index];

@@ -264,11 +264,14 @@ pub fn main() !void {
     var buffer_pool = try common.buffer.BufferPool(4096, 64).init(gpa.allocator());
     defer buffer_pool.deinit();
 
+    var module_registry = try common.ModuleRegistry.init(gpa.allocator());
+    defer module_registry.deinit();
+
     var ctx = common.Context{
         .client_manager = &client_manager,
         .ring = &ring,
         .buffer_pool = &buffer_pool,
-        .module_registry = try common.ModuleRegistry.init(gpa.allocator()),
+        .module_registry = module_registry,
     };
 
     {
