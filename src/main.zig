@@ -238,6 +238,16 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
+    const chat = common.chat.Chat{
+        .text = "hello, world!",
+        .color = .red,
+        .extra = &[_]common.chat.Chat{
+            .{ .text = "foo", .color = .yellow, .extra = null },
+            .{ .text = "bar", .color = .green, .extra = null },
+        },
+    };
+    std.log.debug("{f}", .{chat});
+
     var client_manager = try common.client.ClientManager.init(8, gpa.allocator(), gpa.allocator());
     defer client_manager.deinit();
 

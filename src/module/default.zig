@@ -29,12 +29,18 @@ pub const DefaultModule = struct {
             errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
             var json: [128]u8 = undefined;
+            var counter_buf: [4]u8 = undefined;
+
             const size = packet.ClientPlayChatMessage.encode(
                 &.{
                     .json = try std.fmt.bufPrint(
                         json[0..],
-                        "{{\"text\":\"{s} joined the game, {d}.\",\"color\":\"yellow\"}}",
-                        .{ client.username.items, self.some_counter },
+                        "{f}",
+                        .{common.chat.Chat{ .text = "", .color = .yellow, .extra = &[_]common.chat.Chat{
+                            .{ .text = client.username.items, .color = .red },
+                            .{ .text = " joined the game, " },
+                            .{ .text = try std.fmt.bufPrint(&counter_buf, "{d}", .{self.some_counter}) },
+                        } }},
                     ),
                     .position = .chat,
                 },

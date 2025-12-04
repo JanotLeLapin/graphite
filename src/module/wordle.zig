@@ -8,11 +8,11 @@ const CharStatus = enum(u2) {
     present = 1,
     spot_on = 2,
 
-    fn getColor(self: CharStatus) []const u8 {
+    fn getColor(self: CharStatus) common.chat.ChatColor {
         return switch (self) {
-            .miss => "gray",
-            .present => "yellow",
-            .spot_on => "green",
+            .miss => .gray,
+            .present => .yellow,
+            .spot_on => .green,
         };
     }
 };
@@ -79,19 +79,17 @@ pub const WordleModule = struct {
             var offset = packet.ClientPlayChatMessage.encode(&.{
                 .json = try std.fmt.bufPrint(
                     &buf,
-                    "{{\"text\":\"guess: \",\"extra\":[{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}},{{\"text\":\"{c}\",\"color\":\"{s}\"}}]}}",
-                    .{
-                        message[0],
-                        statuses[0].getColor(),
-                        message[1],
-                        statuses[1].getColor(),
-                        message[2],
-                        statuses[2].getColor(),
-                        message[3],
-                        statuses[3].getColor(),
-                        message[4],
-                        statuses[4].getColor(),
-                    },
+                    "{f}",
+                    .{common.chat.Chat{
+                        .text = "guess: ",
+                        .extra = &[_]common.chat.Chat{
+                            .{ .text = message[0..1], .color = statuses[0].getColor() },
+                            .{ .text = message[1..2], .color = statuses[1].getColor() },
+                            .{ .text = message[2..3], .color = statuses[2].getColor() },
+                            .{ .text = message[3..4], .color = statuses[3].getColor() },
+                            .{ .text = message[4..5], .color = statuses[4].getColor() },
+                        },
+                    }},
                 ),
                 .position = .system,
             }, &b.data) orelse return WordleModuleError.EncodingFailure;
@@ -99,7 +97,7 @@ pub const WordleModule = struct {
             if (std.mem.eql(CharStatus, &statuses, &.{ .spot_on, .spot_on, .spot_on, .spot_on, .spot_on })) {
                 try self.winners.append(self.alloc, client.fd);
                 offset += packet.ClientPlayChatMessage.encode(&.{
-                    .json = "{\"text\":\"good guess!\",\"color\":\"green\"}",
+                    .json = try std.fmt.bufPrint(&buf, "{f}", .{common.chat.Chat{ .text = "good guess!", .color = .green }}),
                     .position = .system,
                 }, b.data[offset..]) orelse return WordleModuleError.EncodingFailure;
             }
