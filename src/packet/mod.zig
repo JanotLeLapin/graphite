@@ -173,12 +173,58 @@ pub const ServerPlayChatMessage = struct {
     }
 };
 
+pub const ServerPlayPlayer = struct {
+    on_ground: u8,
+
+    pub fn decode(buf: []const u8) ?@This() {
+        return genDecodeBasic(@This())(buf);
+    }
+};
+
+pub const ServerPlayPlayerPosition = struct {
+    x: f64,
+    y: f64,
+    z: f64,
+    on_ground: u8,
+
+    pub fn decode(buf: []const u8) ?@This() {
+        return genDecodeBasic(@This())(buf);
+    }
+};
+
+pub const ServerPlayPlayerLook = struct {
+    yaw: f32,
+    pitch: f32,
+    on_ground: u8,
+
+    pub fn decode(buf: []const u8) ?@This() {
+        return genDecodeBasic(@This())(buf);
+    }
+};
+
+pub const ServerPlayPlayerPositionAndLook = struct {
+    x: f64,
+    y: f64,
+    z: f64,
+    yaw: f32,
+    pitch: f32,
+    on_ground: u8,
+
+    pub fn decode(buf: []const u8) ?@This() {
+        return genDecodeBasic(@This())(buf);
+    }
+};
+
 pub const ServerBoundPacket = union(enum) {
     Handshake: ServerHandshake,
     StatusRequest,
     StatusPing: ServerStatusPing,
     LoginStart: ServerLoginStart,
     PlayChatMessage: ServerPlayChatMessage,
+    PlayPlayer: ServerPlayPlayer,
+    PlayPlayerPosition: ServerPlayPlayerPosition,
+    PlayPlayerLook: ServerPlayPlayerLook,
+    PlayPlayerPositionAndLook: ServerPlayPlayerPositionAndLook,
 
     pub fn decode(
         state: common.client.ClientState,
@@ -198,6 +244,10 @@ pub const ServerBoundPacket = union(enum) {
             },
             .Play => switch (packet_id) {
                 0x01 => .{ .PlayChatMessage = ServerPlayChatMessage.decode(buf) orelse return null },
+                0x03 => .{ .PlayPlayer = ServerPlayPlayer.decode(buf) orelse return null },
+                0x04 => .{ .PlayPlayerPosition = ServerPlayPlayerPosition.decode(buf) orelse return null },
+                0x05 => .{ .PlayPlayerLook = ServerPlayPlayerLook.decode(buf) orelse return null },
+                0x06 => .{ .PlayPlayerPositionAndLook = ServerPlayPlayerPositionAndLook.decode(buf) orelse return null },
                 else => return null,
             },
         };
