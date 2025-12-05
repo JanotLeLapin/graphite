@@ -130,7 +130,6 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
     const b = ctx.buffer_pool.allocBuf() catch return;
 
     const pitch = midiToPitch(noteData.midi);
-
     const size = packet.ClientPlaySoundEffect.encode(
         &.{
             .sound_name = "note.harp",
@@ -147,5 +146,4 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
         ctx.buffer_pool.releaseBuf(b.idx);
         return;
     };
-    _ = try ctx.ring.submit();
 }

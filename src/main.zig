@@ -248,7 +248,6 @@ fn keepaliveTask(ctx: *common.Context, _: u64) void {
         ctx.buffer_pool.releaseBuf(b.idx);
         return;
     };
-    _ = try ctx.ring.submit();
 }
 
 pub fn main() !void {
@@ -351,9 +350,9 @@ pub fn main() !void {
                 const sqe = try ctx.ring.getSqe();
                 sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
                 sqe.user_data = @bitCast(common.uring.Userdata{ .op = .timer, .d = 0, .fd = 0 });
-                _ = try ctx.ring.submit();
 
                 scheduler.tick(&ctx);
+                _ = try ctx.ring.submit();
             },
             .read => {
                 const cfd = ud.fd;
