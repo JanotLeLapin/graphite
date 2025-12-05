@@ -125,40 +125,36 @@ fn processPacket(
             std.log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
 
             const b = try ctx.buffer_pool.allocBuf();
-            {
-                errdefer ctx.buffer_pool.releaseBuf(b.idx);
+            errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
-                var offset: usize = 0;
+            var offset: usize = 0;
 
-                offset += packet.ClientLoginSuccess.encode(&.{
-                    .uuid = &uuid_buf,
-                    .username = client.username.items,
-                }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
+            offset += packet.ClientLoginSuccess.encode(&.{
+                .uuid = &uuid_buf,
+                .username = client.username.items,
+            }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
 
-                offset += packet.ClientPlayJoinGame.encode(&.{
-                    .eid = 0,
-                    .gamemode = .survival,
-                    .dimension = .overworld,
-                    .difficulty = .normal,
-                    .max_players = 20,
-                    .level_type = "default",
-                    .reduced_debug_info = 0,
-                }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
+            offset += packet.ClientPlayJoinGame.encode(&.{
+                .eid = 0,
+                .gamemode = .survival,
+                .dimension = .overworld,
+                .difficulty = .normal,
+                .max_players = 20,
+                .level_type = "default",
+                .reduced_debug_info = 0,
+            }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
 
-                offset += packet.ClientPlayPlayerPositionAndLook.encode(&.{
-                    .x = 0.0,
-                    .y = 67.0,
-                    .z = 0.0,
-                    .yaw = 0.0,
-                    .pitch = 0.0,
-                    .flags = 0,
-                }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
+            offset += packet.ClientPlayPlayerPositionAndLook.encode(&.{
+                .x = 0.0,
+                .y = 67.0,
+                .z = 0.0,
+                .yaw = 0.0,
+                .pitch = 0.0,
+                .flags = 0,
+            }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
 
-                try b.prepareOneshot(ctx.ring, client.fd, offset);
-                client.state = .play;
-            }
-
-            _ = try ctx.ring.submit();
+            try b.prepareOneshot(ctx.ring, client.fd, offset);
+            client.state = .play;
 
             dispatch(ctx, "onJoin", .{client});
         },
@@ -339,8 +335,6 @@ pub fn main() !void {
                     sqe.prep_read(cfd, &client_manager.get(cfd).?.read_buf, 0);
                     sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
                 }
-
-                _ = try ring.submit();
             },
             .sigint => {
                 std.log.info("caught sigint", .{});
@@ -378,8 +372,6 @@ pub fn main() !void {
                 sqe.opcode = std.os.linux.IORING_OP.READ;
                 sqe.prep_read(cfd, client.read_buf[client.read_buf_tail..], 0);
                 sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
-
-                _ = try ring.submit();
             },
             .write => {
                 const b = ctx.buffer_pool.buffers[@intCast(ud.d)];

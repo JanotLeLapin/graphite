@@ -25,29 +25,26 @@ pub const DefaultModule = struct {
     ) !void {
         self.some_counter += 1;
         const b = try ctx.buffer_pool.allocBuf();
-        {
-            errdefer ctx.buffer_pool.releaseBuf(b.idx);
+        errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
-            var json: [128]u8 = undefined;
-            var counter_buf: [4]u8 = undefined;
+        var json: [128]u8 = undefined;
+        var counter_buf: [4]u8 = undefined;
 
-            const size = packet.ClientPlayChatMessage.encode(
-                &.{
-                    .json = try std.fmt.bufPrint(
-                        json[0..],
-                        "{f}",
-                        .{common.chat.Chat{ .text = "", .color = .yellow, .extra = &[_]common.chat.Chat{
-                            .{ .text = client.username.items, .color = .red },
-                            .{ .text = " joined the game, " },
-                            .{ .text = try std.fmt.bufPrint(&counter_buf, "{d}", .{self.some_counter}) },
-                        } }},
-                    ),
-                    .position = .chat,
-                },
-                &b.data,
-            ) orelse return DefaultModuleError.EncodingFailure;
-            try b.prepareBroadcast(ctx.ring, ctx.client_manager.lookup.items, size);
-        }
-        _ = try ctx.ring.submit();
+        const size = packet.ClientPlayChatMessage.encode(
+            &.{
+                .json = try std.fmt.bufPrint(
+                    json[0..],
+                    "{f}",
+                    .{common.chat.Chat{ .text = "", .color = .yellow, .extra = &[_]common.chat.Chat{
+                        .{ .text = client.username.items, .color = .red },
+                        .{ .text = " joined the game, " },
+                        .{ .text = try std.fmt.bufPrint(&counter_buf, "{d}", .{self.some_counter}) },
+                    } }},
+                ),
+                .position = .chat,
+            },
+            &b.data,
+        ) orelse return DefaultModuleError.EncodingFailure;
+        try b.prepareBroadcast(ctx.ring, ctx.client_manager.lookup.items, size);
     }
 };

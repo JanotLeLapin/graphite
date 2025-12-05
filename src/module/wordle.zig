@@ -77,45 +77,42 @@ pub const WordleModule = struct {
         }
 
         const b = try ctx.buffer_pool.allocBuf();
-        {
-            errdefer ctx.buffer_pool.releaseBuf(b.idx);
+        errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
-            var buf: [256]u8 = undefined;
+        var buf: [256]u8 = undefined;
 
-            var offset = packet.ClientPlayChatMessage.encode(&.{
-                .json = try std.fmt.bufPrint(
-                    &buf,
-                    "{f}",
-                    .{common.chat.Chat{
-                        .text = "guess: ",
-                        .extra = &[_]common.chat.Chat{
-                            .{ .text = message[0..1], .color = statuses[0].getColor() },
-                            .{ .text = message[1..2], .color = statuses[1].getColor() },
-                            .{ .text = message[2..3], .color = statuses[2].getColor() },
-                            .{ .text = message[3..4], .color = statuses[3].getColor() },
-                            .{ .text = message[4..5], .color = statuses[4].getColor() },
-                        },
-                    }},
-                ),
+        var offset = packet.ClientPlayChatMessage.encode(&.{
+            .json = try std.fmt.bufPrint(
+                &buf,
+                "{f}",
+                .{common.chat.Chat{
+                    .text = "guess: ",
+                    .extra = &[_]common.chat.Chat{
+                        .{ .text = message[0..1], .color = statuses[0].getColor() },
+                        .{ .text = message[1..2], .color = statuses[1].getColor() },
+                        .{ .text = message[2..3], .color = statuses[2].getColor() },
+                        .{ .text = message[3..4], .color = statuses[3].getColor() },
+                        .{ .text = message[4..5], .color = statuses[4].getColor() },
+                    },
+                }},
+            ),
+            .position = .system,
+        }, &b.data) orelse return WordleModuleError.EncodingFailure;
+
+        if (std.mem.eql(CharStatus, &statuses, &.{ .spot_on, .spot_on, .spot_on, .spot_on, .spot_on })) {
+            try self.winners.append(self.alloc, client.fd);
+            offset += packet.ClientPlayChatMessage.encode(&.{
+                .json = try std.fmt.bufPrint(&buf, "{f}", .{common.chat.Chat{ .text = "good guess!", .color = .green }}),
                 .position = .system,
-            }, &b.data) orelse return WordleModuleError.EncodingFailure;
+            }, b.data[offset..]) orelse return WordleModuleError.EncodingFailure;
 
-            if (std.mem.eql(CharStatus, &statuses, &.{ .spot_on, .spot_on, .spot_on, .spot_on, .spot_on })) {
-                try self.winners.append(self.alloc, client.fd);
-                offset += packet.ClientPlayChatMessage.encode(&.{
-                    .json = try std.fmt.bufPrint(&buf, "{f}", .{common.chat.Chat{ .text = "good guess!", .color = .green }}),
-                    .position = .system,
-                }, b.data[offset..]) orelse return WordleModuleError.EncodingFailure;
-
-                try ctx.scheduler.schedule(&playNoteTask, 1, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 48 }));
-                try ctx.scheduler.schedule(&playNoteTask, 6, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 52 }));
-                try ctx.scheduler.schedule(&playNoteTask, 11, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 55 }));
-                try ctx.scheduler.schedule(&playNoteTask, 11, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 59 }));
-            }
-
-            try b.prepareOneshot(ctx.ring, client.fd, offset);
+            try ctx.scheduler.schedule(&playNoteTask, 1, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 48 }));
+            try ctx.scheduler.schedule(&playNoteTask, 6, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 52 }));
+            try ctx.scheduler.schedule(&playNoteTask, 11, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 55 }));
+            try ctx.scheduler.schedule(&playNoteTask, 11, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 59 }));
         }
-        _ = try ctx.ring.submit();
+
+        try b.prepareOneshot(ctx.ring, client.fd, offset);
     }
 };
 
