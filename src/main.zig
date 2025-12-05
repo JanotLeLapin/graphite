@@ -335,6 +335,8 @@ pub fn main() !void {
                     sqe.prep_read(cfd, &client_manager.get(cfd).?.read_buf, 0);
                     sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
                 }
+
+                _ = try ctx.ring.submit();
             },
             .sigint => {
                 std.log.info("caught sigint", .{});
@@ -372,6 +374,7 @@ pub fn main() !void {
                 sqe.opcode = std.os.linux.IORING_OP.READ;
                 sqe.prep_read(cfd, client.read_buf[client.read_buf_tail..], 0);
                 sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
+                _ = try ctx.ring.submit();
             },
             .write => {
                 const b = ctx.buffer_pool.buffers[@intCast(ud.d)];
