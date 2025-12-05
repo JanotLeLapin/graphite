@@ -318,3 +318,16 @@ pub const ClientPlayPlayerPositionAndLook = struct {
         return genEncodeBasic(@This(), 0x08)(self, buf);
     }
 };
+
+pub const ClientPlaySoundEffect = struct {
+    sound_name: []const u8,
+    x: i32,
+    y: i32,
+    z: i32,
+    volume: f32,
+    pitch: u8,
+
+    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+        return genEncodeBasic(@This(), 0x29)(self, buf);
+    }
+};

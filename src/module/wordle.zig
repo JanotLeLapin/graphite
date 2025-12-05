@@ -3,6 +3,12 @@ const std = @import("std");
 const common = @import("../common/mod.zig");
 const packet = @import("../packet/mod.zig");
 
+const NoteTaskData = packed struct(u64) {
+    client_fd: i32,
+    midi: u16,
+    _: u16 = 0,
+};
+
 const CharStatus = enum(u2) {
     miss = 0,
     present = 1,
@@ -100,6 +106,11 @@ pub const WordleModule = struct {
                     .json = try std.fmt.bufPrint(&buf, "{f}", .{common.chat.Chat{ .text = "good guess!", .color = .green }}),
                     .position = .system,
                 }, b.data[offset..]) orelse return WordleModuleError.EncodingFailure;
+
+                try ctx.scheduler.schedule(&playNoteTask, 1, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 48 }));
+                try ctx.scheduler.schedule(&playNoteTask, 6, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 52 }));
+                try ctx.scheduler.schedule(&playNoteTask, 11, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 55 }));
+                try ctx.scheduler.schedule(&playNoteTask, 11, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 59 }));
             }
 
             try b.prepareOneshot(ctx.ring, client.fd, offset);
@@ -107,3 +118,34 @@ pub const WordleModule = struct {
         _ = try ctx.ring.submit();
     }
 };
+
+fn midiToPitch(midi: u16) u8 {
+    const f = @exp2((@as(f32, @floatFromInt(midi)) - 42 - 12) / 12);
+    return @intFromFloat(f * 63 + 0.5);
+}
+
+fn playNoteTask(ctx: *common.Context, userdata: u64) void {
+    const noteData: NoteTaskData = @bitCast(userdata);
+
+    const b = ctx.buffer_pool.allocBuf() catch return;
+
+    const pitch = midiToPitch(noteData.midi);
+
+    const size = packet.ClientPlaySoundEffect.encode(
+        &.{
+            .sound_name = "note.harp",
+            .x = 0,
+            .y = 67 * 8,
+            .z = 0,
+            .volume = 10.0,
+            .pitch = pitch,
+        },
+        &b.data,
+    ).?;
+
+    b.prepareOneshot(ctx.ring, noteData.client_fd, size) catch {
+        ctx.buffer_pool.releaseBuf(b.idx);
+        return;
+    };
+    _ = try ctx.ring.submit();
+}
