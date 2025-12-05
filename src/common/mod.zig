@@ -5,6 +5,7 @@ const Modules = @import("root").Modules;
 pub const buffer = @import("buffer.zig");
 pub const chat = @import("chat.zig");
 pub const client = @import("client.zig");
+pub const scheduler = @import("scheduler.zig");
 pub const uring = @import("uring.zig");
 
 pub const ModuleRegistry = struct {
@@ -65,5 +66,6 @@ pub const Context = struct {
     client_manager: *client.ClientManager,
     ring: *uring.Ring,
     buffer_pool: *buffer.BufferPool(4096),
+    scheduler: *scheduler.Scheduler,
     module_registry: ModuleRegistry,
 };

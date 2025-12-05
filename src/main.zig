@@ -210,8 +210,8 @@ fn createSig() !i32 {
 
 fn createTimer() !i32 {
     var timerspec = std.mem.zeroes(std.os.linux.itimerspec);
-    timerspec.it_interval.sec = 10;
-    timerspec.it_value.sec = 5;
+    timerspec.it_interval.nsec = 50000000;
+    timerspec.it_value.nsec = 1;
 
     const timer_fd = try std.posix.timerfd_create(std.posix.timerfd_clockid_t.MONOTONIC, std.os.linux.TFD{});
     try std.posix.timerfd_settime(timer_fd, std.os.linux.TFD.TIMER{}, &timerspec, null);
@@ -232,6 +232,23 @@ fn createServer() !i32 {
     try std.posix.listen(server_fd, 128);
 
     return server_fd;
+}
+
+fn keepaliveTask(ctx: *common.Context, _: u64) void {
+    ctx.scheduler.schedule(&keepaliveTask, 200, 0) catch {};
+
+    const b = ctx.buffer_pool.allocBuf() catch return;
+
+    const size = packet.ClientPlayKeepAlive.encode(
+        &.{ .id = packet.types.VarInt{ .value = 67 } },
+        &b.data,
+    ).?;
+
+    b.prepareBroadcast(ctx.ring, ctx.client_manager.lookup.items, size) catch {
+        ctx.buffer_pool.releaseBuf(b.idx);
+        return;
+    };
+    _ = try ctx.ring.submit();
 }
 
 pub fn main() !void {
@@ -272,6 +289,11 @@ pub fn main() !void {
     var buffer_pool = try common.buffer.BufferPool(4096).init(gpa.allocator(), 64);
     defer buffer_pool.deinit();
 
+    var scheduler = common.scheduler.Scheduler.init(gpa.allocator());
+    defer scheduler.deinit();
+
+    try scheduler.schedule(&keepaliveTask, 200, 0);
+
     var module_registry = try common.ModuleRegistry.init(gpa.allocator());
     defer module_registry.deinit();
 
@@ -279,6 +301,7 @@ pub fn main() !void {
         .client_manager = &client_manager,
         .ring = &ring,
         .buffer_pool = &buffer_pool,
+        .scheduler = &scheduler,
         .module_registry = module_registry,
     };
 
@@ -335,23 +358,12 @@ pub fn main() !void {
                 break;
             },
             .timer => {
-                std.log.debug("keepalive", .{});
-
-                const sqe = try ring.getSqe();
+                const sqe = try ctx.ring.getSqe();
                 sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
                 sqe.user_data = @bitCast(common.uring.Userdata{ .op = .timer, .d = 0, .fd = 0 });
+                _ = try ctx.ring.submit();
 
-                const b = try buffer_pool.allocBuf();
-
-                const size = packet.ClientPlayKeepAlive.encode(
-                    &.{ .id = packet.types.VarInt{ .value = 67 } },
-                    &b.data,
-                ).?;
-
-                b.prepareBroadcast(&ring, client_manager.lookup.items, size) catch {
-                    ctx.buffer_pool.releaseBuf(b.idx);
-                };
-                _ = try ring.submit();
+                scheduler.tick(&ctx);
             },
             .read => {
                 const cfd = ud.fd;
