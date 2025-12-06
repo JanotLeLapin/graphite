@@ -5,8 +5,8 @@ const packet = @import("../packet/mod.zig");
 
 const NoteTaskData = packed struct(u64) {
     client_fd: i32,
-    midi: u16,
-    _: u16 = 0,
+    midi: u8,
+    _: u24 = 0,
 };
 
 const CharStatus = enum(u2) {
@@ -116,17 +116,12 @@ pub const WordleModule = struct {
     }
 };
 
-fn midiToPitch(midi: u16) u8 {
-    const f = @exp2((@as(f32, @floatFromInt(midi)) - 42 - 12) / 12);
-    return @intFromFloat(f * 63 + 0.5);
-}
-
 fn playNoteTask(ctx: *common.Context, userdata: u64) void {
     const noteData: NoteTaskData = @bitCast(userdata);
 
     const b = ctx.buffer_pool.allocBuf() catch return;
 
-    const pitch = midiToPitch(noteData.midi);
+    const pitch = common.pitchFromMidi(noteData.midi);
     const size = packet.ClientPlaySoundEffect.encode(
         &.{
             .sound_name = "note.harp",
