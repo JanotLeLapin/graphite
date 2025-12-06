@@ -119,6 +119,8 @@ pub const WordleModule = struct {
 fn playNoteTask(ctx: *common.Context, userdata: u64) void {
     const noteData: NoteTaskData = @bitCast(userdata);
 
+    _ = ctx.client_manager.get(noteData.client_fd) orelse return;
+
     const b = ctx.buffer_pool.allocBuf() catch return;
 
     const pitch = common.pitchFromMidi(noteData.midi);
