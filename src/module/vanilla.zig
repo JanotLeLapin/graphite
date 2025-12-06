@@ -3,8 +3,16 @@ const std = @import("std");
 const common = @import("../common/mod.zig");
 const packet = @import("../packet/mod.zig");
 
+pub const VanillaStatusOptions = struct {
+    version_name: []const u8,
+    description: common.chat.Chat,
+};
+
 pub const VanillaModuleOptions = struct {
-    status: ?common.chat.Chat = .{ .text = "A Minecraft Server" },
+    status: ?VanillaStatusOptions = .{
+        .version_name = "1.8.8",
+        .description = common.chat.Chat{ .text = "A Minecraft Server" },
+    },
     send_join_message: bool = true,
     send_quit_message: bool = true,
 };
@@ -56,7 +64,10 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
                 var json: [512]u8 = undefined;
                 const size = packet.ClientStatusResponse.encode(
                     &.{
-                        .response = try std.fmt.bufPrint(json[0..], "{{\"version\":{{\"name\":\"1.8.8\",\"protocol\":47}},\"players\":{{\"max\":20,\"online\":{d},\"sample\":[]}},\"description\":{f}}}", .{ 0, status }),
+                        .response = try std.fmt.bufPrint(json[0..], "{{\"version\":{{\"name\":\"" ++ status.version_name ++ "\",\"protocol\":47}},\"players\":{{\"max\":20,\"online\":{d},\"sample\":[]}},\"description\":{f}}}", .{
+                            0,
+                            status.description,
+                        }),
                     },
                     b.data[0..],
                 ) orelse return error.EncodingFailure;
