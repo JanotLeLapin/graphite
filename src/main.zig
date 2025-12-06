@@ -312,29 +312,32 @@ pub fn main() !void {
 
     while (true) {
         const cqe = try ring.waitCqe();
+
         const ud: common.uring.Userdata = @bitCast(cqe.user_data);
         switch (ud.op) {
             .accept => {
-                const cfd = cqe.res;
-                std.log.debug("client: {d} connected", .{cfd});
+                if (cqe.res < 0) {
+                    const errcode: usize = @intCast(-cqe.res);
+                    const err = std.posix.errno(errcode);
+                    std.log.err("cqe error: accept: {s}", .{@tagName(err)});
+                } else {
+                    const cfd = cqe.res;
+                    std.log.debug("client: {d} connected", .{cfd});
 
-                var client = try client_manager.add(cfd);
-                client.state = .handshake;
-                client.addr = addr;
+                    var client = try client_manager.add(cfd);
+                    client.state = .handshake;
+                    client.addr = addr;
 
-                {
-                    const sqe = try ring.getSqe();
-                    sqe.opcode = std.os.linux.IORING_OP.ACCEPT;
-                    sqe.prep_accept(server_fd, &addr, &addr_len, 0);
-                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.accept, .d = 0, .fd = cfd });
-                }
-
-                {
                     const sqe = try ring.getSqe();
                     sqe.opcode = std.os.linux.IORING_OP.READ;
                     sqe.prep_read(cfd, &client_manager.get(cfd).?.read_buf, 0);
                     sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
                 }
+
+                const sqe = try ring.getSqe();
+                sqe.opcode = std.os.linux.IORING_OP.ACCEPT;
+                sqe.prep_accept(server_fd, &addr, &addr_len, 0);
+                sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.accept, .d = 0, .fd = 0 });
 
                 _ = try ctx.ring.submit();
             },
@@ -353,12 +356,14 @@ pub fn main() !void {
             .read => {
                 const cfd = ud.fd;
                 if (cqe.res < 0) {
-                    std.log.err("cqe error: {d}", .{cqe.res});
+                    const errcode: usize = @intCast(-cqe.res);
+                    const err = std.posix.errno(errcode);
+                    std.log.err("cqe error: read: {s}", .{@tagName(err)});
+                    client_manager.remove(cfd);
                     continue;
                 }
 
                 const bytes: usize = @intCast(cqe.res);
-
                 if (0 == bytes) {
                     client_manager.remove(cfd);
                     std.log.debug("client: {d} disconnected", .{cfd});
@@ -374,11 +379,20 @@ pub fn main() !void {
                 sqe.opcode = std.os.linux.IORING_OP.READ;
                 sqe.prep_read(cfd, client.read_buf[client.read_buf_tail..], 0);
                 sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
+
                 _ = try ctx.ring.submit();
             },
             .write => {
-                const b = ctx.buffer_pool.buffers[@intCast(ud.d)];
+                const cfd = ud.fd;
+                if (cqe.res < 0) {
+                    const errcode: usize = @intCast(-cqe.res);
+                    const err = std.posix.errno(errcode);
+                    std.log.err("cqe error: write: {s}", .{@tagName(err)});
+                    client_manager.remove(cfd);
+                    continue;
+                }
 
+                const b = ctx.buffer_pool.buffers[@intCast(ud.d)];
                 b.ref_count -= 1;
                 if (0 == b.ref_count) {
                     ctx.buffer_pool.releaseBuf(@intCast(ud.d));
