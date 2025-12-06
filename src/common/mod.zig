@@ -65,7 +65,7 @@ pub const Uuid = struct {
 /// Encodes a MIDI pitch value to a Minecraft client-bound note pitch value.
 /// The MIDI note is clamped between 42 and 66.
 pub fn pitchFromMidi(midi: u8) u8 {
-    const clamped: f32 = @floatFromInt(@min(@max(midi, 42), 66));
+    const clamped: f64 = @floatFromInt(@min(@max(midi, 42), 66));
     return @intFromFloat(63 * @exp2((clamped - 54) / 12));
 }
 
