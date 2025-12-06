@@ -9,8 +9,11 @@ const ADDRESS = "127.0.0.1";
 const URING_QUEUE_ENTRIES = 4096;
 
 pub const Modules = .{
-    @import("module/default.zig").DefaultModule,
-    @import("module/wordle.zig").WordleModule,
+    @import("module/vanilla.zig").VanillaModule(.{
+        .send_join_message = true,
+        .send_quit_message = true,
+    }),
+    @import("module/pachelbel.zig").PachelbelModule,
 };
 
 fn dispatch(
