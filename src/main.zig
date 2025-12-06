@@ -88,18 +88,7 @@ fn processPacket(
     switch (p) {
         .handshake => client.state = @enumFromInt(p.handshake.next_state),
         .status_request => {
-            const b = try ctx.buffer_pool.allocBuf();
-            {
-                errdefer ctx.buffer_pool.releaseBuf(b.idx);
-
-                const size = packet.ClientStatusResponse.encode(
-                    &.{ .response = "{\"version\":{\"name\":\"1.8.8\",\"protocol\":47},\"players\":{\"max\":20,\"online\":0,\"sample\":[]},\"description\":{\"text\":\"This is a really really long description\",\"color\":\"red\"}}" },
-                    &b.data,
-                ) orelse return PacketProcessingError.EncodingFailure;
-
-                try b.prepareOneshot(ctx.ring, client.fd, size);
-            }
-            _ = try ctx.ring.submit();
+            dispatch(ctx, "onStatus", .{client});
         },
         .status_ping => {
             const b = try ctx.buffer_pool.allocBuf();
@@ -363,14 +352,17 @@ pub fn main() !void {
                     continue;
                 }
 
+                const client = client_manager.get(cfd).?;
                 const bytes: usize = @intCast(cqe.res);
                 if (0 == bytes) {
+                    if (client.state == .play) {
+                        dispatch(&ctx, "onQuit", .{client});
+                    }
                     client_manager.remove(cfd);
                     std.log.debug("client: {d} disconnected", .{cfd});
                     continue;
                 }
 
-                const client = client_manager.get(cfd).?;
                 client.read_buf_tail += bytes;
 
                 splitPackets(&ctx, client);
