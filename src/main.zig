@@ -382,4 +382,6 @@ pub fn main() !void {
         _ = try ring.pump(&ctx);
         _ = try ring.submit();
     }
+
+    std.log.debug("busy buffers on exit: {d}", .{buffer_pool.busy_count});
 }
