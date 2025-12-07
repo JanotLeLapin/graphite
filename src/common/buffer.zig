@@ -47,13 +47,12 @@ pub fn Buffer(comptime size: comptime_int) type {
             for (client_manager.lookup.items) |slot| {
                 if (slot.client) |c| {
                     var sqe = ring.getSqe() catch {
-                        try ring.tasks.append(ring.task_alloc, .{
-                            .buffer = self,
-                            .d = .{ .broadcast = .{
+                        try ring.insertTask(.{ .buffer = self, .d = .{
+                            .broadcast = .{
                                 .cursor = self.ref_count,
                                 .max_gen = client_manager.global_generation,
-                            } },
-                        });
+                            },
+                        } });
                         break;
                     };
                     sqe.prep_write(c.fd, self.data[0..len], 0);

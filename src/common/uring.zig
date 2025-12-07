@@ -49,6 +49,11 @@ pub const RingTask = struct {
     }
 };
 
+pub const RingTaskNode = struct {
+    node: std.DoublyLinkedList.Node,
+    data: RingTask,
+};
+
 pub const RingError = error{
     SubmissionQueueFull,
     CompletionQueueEmpty,
@@ -74,7 +79,7 @@ pub const Ring = struct {
     cq_entries: *const u32,
     cqes: [*]std.os.linux.io_uring_cqe,
 
-    tasks: std.ArrayList(RingTask),
+    tasks: std.DoublyLinkedList,
     task_alloc: std.mem.Allocator,
 
     pub fn init(alloc: std.mem.Allocator, entries: u32) !Ring {
@@ -125,7 +130,7 @@ pub const Ring = struct {
             .cq_mask = @ptrCast(@alignCast(sq_ptr.ptr + params.cq_off.ring_mask)),
             .cq_entries = @ptrCast(@alignCast(sq_ptr.ptr + params.cq_off.ring_entries)),
             .cqes = @ptrCast(@alignCast(sq_ptr.ptr + params.cq_off.cqes)),
-            .tasks = try std.ArrayList(RingTask).initCapacity(alloc, 8),
+            .tasks = .{ .first = null, .last = null },
             .task_alloc = alloc,
         };
     }
@@ -186,12 +191,21 @@ pub const Ring = struct {
         return self.peekCqe() orelse RingError.CompletionQueueEmpty;
     }
 
+    pub fn insertTask(self: *Ring, task: RingTask) !void {
+        const node = try self.task_alloc.create(RingTaskNode);
+        node.data = task;
+        node.node.next = null;
+        self.tasks.append(&node.node);
+    }
+
     pub fn pump(self: *Ring, ctx: *Context) !void {
-        while (self.tasks.items.len > 0) {
-            const finished = try self.tasks.items[0].pump(self, ctx.client_manager.lookup.items);
+        while (self.tasks.first) |node| {
+            const task_node: *RingTaskNode = @fieldParentPtr("node", node);
+            const finished = try task_node.data.pump(self, ctx.client_manager.lookup.items);
 
             if (finished) {
-                _ = self.tasks.orderedRemove(0);
+                _ = self.tasks.popFirst();
+                self.task_alloc.destroy(task_node);
             } else {
                 break;
             }
@@ -202,6 +216,10 @@ pub const Ring = struct {
         std.posix.close(self.fd);
         std.posix.munmap(self.sqes_mmap);
         std.posix.munmap(self.sq_mmap);
-        self.tasks.deinit(self.task_alloc);
+
+        while (self.tasks.pop()) |node| {
+            const task_node: *RingTaskNode = @fieldParentPtr("node", node);
+            self.task_alloc.destroy(task_node);
+        }
     }
 };
