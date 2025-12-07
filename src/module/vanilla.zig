@@ -96,6 +96,24 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
             });
         }
 
+        pub fn onChatMessage(
+            _: *@This(),
+            ctx: *common.Context,
+            client: *common.client.Client,
+            message: []const u8,
+        ) !void {
+            try broadcastMessage(1024, ctx, common.chat.Chat{
+                .text = "",
+                .color = .white,
+                .extra = &[_]common.chat.Chat{
+                    .{ .text = "<" },
+                    .{ .text = client.username.items },
+                    .{ .text = "> " },
+                    .{ .text = message },
+                },
+            });
+        }
+
         pub fn onQuit(
             _: *@This(),
             ctx: *common.Context,
