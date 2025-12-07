@@ -24,9 +24,84 @@ pub const Difficulty = enum(u8) {
     hard = 3,
 };
 
+pub const DecodeError = error{
+    OutOfBounds,
+    DecodeFailure,
+};
+
+pub const EncodeError = error{
+    OutOfBounds,
+    EncodeFailure,
+};
+
+pub fn decode(comptime T: anytype, buf: []const u8) !struct { value: T, len: usize } {
+    switch (@typeInfo(T)) {
+        .int, .float => {
+            const size = @sizeOf(T);
+            if (buf.len < size) {
+                return DecodeError.OutOfBounds;
+            }
+
+            const raw = std.mem.readInt(std.meta.Int(.unsigned, size * 8), buf[0..size], .big);
+            return .{ .value = @bitCast(raw), .len = size };
+        },
+        .pointer => |p| {
+            if (p.size != .slice or !p.is_const or p.child != u8) {
+                @compileError("invalid type: " ++ @typeName(T));
+            }
+
+            const string = types.String.decode(buf) orelse return DecodeError.DecodeFailure;
+            return .{ .value = string.value, .len = string.len };
+        },
+        .@"struct" => {
+            const val = T.decode(buf) orelse return DecodeError.DecodeFailure;
+            return .{ .value = T{ .value = val.value }, .len = val.len };
+        },
+        else => @compileError("invalid type: " ++ @typeName(T)),
+    }
+}
+
+pub fn encode(comptime T: anytype, v: T, buf: []u8) !usize {
+    switch (@typeInfo(T)) {
+        .int, .float => {
+            const size = @sizeOf(T);
+            if (buf.len < size) {
+                return EncodeError.OutOfBounds;
+            }
+
+            const raw: std.meta.Int(.unsigned, size * 8) = @bitCast(v);
+            buf[0..size].* = @bitCast(@byteSwap(raw));
+            return size;
+        },
+        .@"enum" => {
+            const TagType = @typeInfo(T).@"enum".tag_type;
+            const size = @sizeOf(TagType);
+            if (buf.len < size) {
+                return EncodeError.OutOfBounds;
+            }
+
+            std.mem.writeInt(TagType, buf[0..size], @intFromEnum(v), .big);
+            return size;
+        },
+        .pointer => |p| {
+            if (p.size != .slice or !p.is_const or p.child != u8) {
+                @compileError("invalid type: " ++ @typeName(T));
+            }
+
+            const size = types.String.encode(v, buf) orelse return EncodeError.EncodeFailure;
+            return size;
+        },
+        .@"struct" => {
+            const size = T.encode(v.value, buf) orelse return EncodeError.EncodeFailure;
+            return size;
+        },
+        else => @compileError("invalid type: " ++ @typeName(T)),
+    }
+}
+
 fn genDecodeBasic(comptime T: anytype) fn ([]const u8) ?T {
     return struct {
-        fn decode(buf: []const u8) ?T {
+        fn decodeFn(buf: []const u8) ?T {
             var res: T = undefined;
             var offset: usize = 0;
 
@@ -38,40 +113,14 @@ fn genDecodeBasic(comptime T: anytype) fn ([]const u8) ?T {
                 const rem = buf[offset..];
                 const FieldType = field.type;
 
-                switch (@typeInfo(FieldType)) {
-                    .int, .float => {
-                        const size = @sizeOf(FieldType);
-                        if (rem.len < size) {
-                            return null;
-                        }
-
-                        const raw = std.mem.readInt(std.meta.Int(.unsigned, size * 8), rem[0..size], .big);
-                        @field(res, field.name) = @bitCast(raw);
-                        offset += size;
-                    },
-                    .pointer => |p| {
-                        if (p.size != .slice or !p.is_const or p.child != u8) {
-                            std.debug.panic("can't parse field '{s}' with type: {any}", .{ field.name, FieldType });
-                        }
-
-                        const string = types.String.decode(rem) orelse return null;
-                        @field(res, field.name) = string.value;
-                        offset += string.len;
-                    },
-                    .@"struct" => {
-                        const val = FieldType.decode(rem) orelse return null;
-                        @field(res, field.name).value = val.value;
-                        offset += val.len;
-                    },
-                    else => {
-                        std.debug.panic("can't parse field '{s}' with type: {any}", .{ field.name, FieldType });
-                    },
-                }
+                const decoded = decode(FieldType, rem) catch return null;
+                @field(res, field.name) = decoded.value;
+                offset += decoded.len;
             }
 
             return res;
         }
-    }.decode;
+    }.decodeFn;
 }
 
 fn genEncodeBasic(
@@ -79,7 +128,7 @@ fn genEncodeBasic(
     comptime packet_id: comptime_int,
 ) fn (*const T, []u8) ?usize {
     return struct {
-        fn encode(self: *const T, buf: []u8) ?usize {
+        fn encodeFn(self: *const T, buf: []u8) ?usize {
             var offset: usize = 5;
             offset += types.VarInt.encode(packet_id, buf[offset..]) orelse return null;
 
@@ -91,43 +140,7 @@ fn genEncodeBasic(
                 const rem = buf[offset..];
                 const FieldType = field.type;
 
-                switch (@typeInfo(FieldType)) {
-                    .int, .float => {
-                        const size = @sizeOf(FieldType);
-                        if (rem.len < size) {
-                            return null;
-                        }
-
-                        const raw: std.meta.Int(.unsigned, size * 8) = @bitCast(@field(self, field.name));
-                        rem[0..size].* = @bitCast(@byteSwap(raw));
-                        offset += size;
-                    },
-                    .@"enum" => {
-                        const TagType = @typeInfo(FieldType).@"enum".tag_type;
-                        const size = @sizeOf(TagType);
-                        if (rem.len < size) {
-                            return null;
-                        }
-
-                        std.mem.writeInt(TagType, rem[0..size], @intFromEnum(@field(self, field.name)), .big);
-                        offset += size;
-                    },
-                    .pointer => |p| {
-                        if (p.size != .slice or !p.is_const or p.child != u8) {
-                            std.debug.panic("can't parse field '{s}' with type: {any}", .{ field.name, FieldType });
-                        }
-
-                        const size = types.String.encode(@field(self, field.name), rem) orelse return null;
-                        offset += size;
-                    },
-                    .@"struct" => {
-                        const size = FieldType.encode(@field(self, field.name).value, rem) orelse return null;
-                        offset += size;
-                    },
-                    else => {
-                        std.debug.panic("can't parse field '{s}' with type: {any}", .{ field.name, FieldType });
-                    },
-                }
+                offset += encode(FieldType, @field(self, field.name), rem) catch return null;
             }
 
             const size = types.VarInt.encode(@intCast(offset - 5), buf) orelse return null;
@@ -135,7 +148,7 @@ fn genEncodeBasic(
 
             return size + offset - 5;
         }
-    }.encode;
+    }.encodeFn;
 }
 
 pub const ServerHandshake = struct {
