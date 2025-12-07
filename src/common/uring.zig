@@ -73,15 +73,21 @@ pub const RingTask = union(enum) {
                 return true;
             },
             .broadcast => |*b| {
-                for (clients[b.cursor..]) |slot| {
+                while (b.cursor < clients.len) : (b.cursor += 1) {
+                    const slot = clients[b.cursor];
+
+                    if (slot.generation > b.max_gen) {
+                        continue;
+                    }
+
                     if (slot.client) |c| {
                         var sqe = ring.getSqe() catch return false;
                         sqe.prep_write(c.fd, b.buffer.data[0..b.buffer.size], 0);
                         sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.buffer.idx), .fd = c.fd });
-                        b.cursor += 1;
                         b.buffer.ref_count += 1;
                     }
                 }
+                b.buffer.ref_count -= 1;
                 return true;
             },
         }
@@ -319,15 +325,16 @@ pub const Ring = struct {
         b.size = size;
         b.ref_count = 0;
 
-        for (ctx.client_manager.lookup.items) |slot| {
+        for (ctx.client_manager.lookup.items, 0..) |slot, i| {
             if (slot.client) |c| {
                 var sqe = self.getSqe() catch {
+                    b.ref_count += 1;
                     try self.insertTask(.{ .broadcast = .{
                         .buffer = b,
-                        .cursor = b.ref_count,
+                        .cursor = i,
                         .max_gen = ctx.client_manager.global_generation,
                     } });
-                    break;
+                    return;
                 };
                 sqe.prep_write(c.fd, b.data[0..size], 0);
                 sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.idx), .fd = c.fd });
