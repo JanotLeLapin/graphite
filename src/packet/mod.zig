@@ -11,6 +11,10 @@ pub const GamemodeType = enum(u8) {
     spectator = 3,
 };
 
+pub fn Gamemode(comptime Gt: GamemodeType, comptime hardcore: bool) u8 {
+    return @intFromEnum(Gt) | (@as(u8, @intCast(@intFromBool(hardcore))) << 7);
+}
+
 pub const Dimension = enum(i8) {
     nether = -1,
     overworld = 0,
@@ -292,8 +296,8 @@ pub const ClientPlayKeepAlive = struct {
 };
 
 pub const ClientPlayJoinGame = struct {
-    eid: i32,
-    gamemode: GamemodeType,
+    entity_id: i32,
+    gamemode: u8,
     dimension: Dimension,
     difficulty: Difficulty,
     max_players: u8,
@@ -315,6 +319,15 @@ pub const ClientPlayChatMessage = struct {
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x02)(self, buf);
+    }
+};
+
+pub const ClientPlayTimeUpdate = struct {
+    world_age: usize,
+    time_of_day: usize,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x03)(self, buf);
     }
 };
 
@@ -341,6 +354,14 @@ pub const ClientPlaySoundEffect = struct {
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x29)(self, buf);
+    }
+};
+
+pub const ClientPlayDisconnect = struct {
+    reason: []const u8,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x40)(self, buf);
     }
 };
 

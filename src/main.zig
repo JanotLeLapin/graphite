@@ -127,8 +127,8 @@ fn processPacket(
             }, b.data[offset..]);
 
             offset += try packet.ClientPlayJoinGame.encode(&.{
-                .eid = 0,
-                .gamemode = .survival,
+                .entity_id = 0,
+                .gamemode = packet.Gamemode(.survival, false),
                 .dimension = .overworld,
                 .difficulty = .normal,
                 .max_players = 20,
