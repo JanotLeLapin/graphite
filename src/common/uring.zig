@@ -18,16 +18,28 @@ pub const Userdata = packed struct {
     fd: i32,
 };
 
-pub const RingTask = struct {
-    buffer: *Buffer,
-    d: union(enum) {
-        oneshot: struct {
-            cfd: i32,
-        },
-        broadcast: struct {
-            cursor: usize,
-            max_gen: u64,
-        },
+pub const RingTask = union(enum) {
+    accept: struct {
+        sfd: i32,
+        addr: *std.os.linux.sockaddr,
+        addr_len: *std.os.linux.socklen_t,
+    },
+    timer: struct {
+        tfd: i32,
+        tinfo: *u64,
+    },
+    read: struct {
+        cfd: i32,
+        buffer: []u8,
+    },
+    oneshot: struct {
+        buffer: *Buffer,
+        cfd: i32,
+    },
+    broadcast: struct {
+        buffer: *Buffer,
+        cursor: usize,
+        max_gen: u64,
     },
 
     pub fn pump(
@@ -35,21 +47,39 @@ pub const RingTask = struct {
         ring: *Ring,
         clients: []client.ClientSlot,
     ) !bool {
-        switch (self.d) {
-            .oneshot => |o| {
+        switch (self.*) {
+            .accept => |*a| {
                 var sqe = ring.getSqe() catch return false;
-                sqe.prep_write(o.cfd, self.buffer.data[0..self.buffer.size], 0);
-                sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(self.buffer.idx), .fd = o.cfd });
+                sqe.prep_accept(a.sfd, a.addr, a.addr_len, 0);
+                sqe.user_data = @bitCast(Userdata{ .op = .accept, .d = 0, .fd = 0 });
+                return true;
+            },
+            .timer => |*t| {
+                var sqe = ring.getSqe() catch return false;
+                sqe.prep_read(t.tfd, @ptrCast(t.tinfo), 0);
+                sqe.user_data = @bitCast(Userdata{ .op = .timer, .d = 0, .fd = 0 });
+                return true;
+            },
+            .read => |*r| {
+                var sqe = ring.getSqe() catch return false;
+                sqe.prep_read(r.cfd, r.buffer, 0);
+                sqe.user_data = @bitCast(Userdata{ .op = .read, .d = 0, .fd = 0 });
+                return true;
+            },
+            .oneshot => |*o| {
+                var sqe = ring.getSqe() catch return false;
+                sqe.prep_write(o.cfd, o.buffer.data[0..o.buffer.size], 0);
+                sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(o.buffer.idx), .fd = o.cfd });
                 return true;
             },
             .broadcast => |*b| {
                 for (clients[b.cursor..]) |slot| {
                     if (slot.client) |c| {
                         var sqe = ring.getSqe() catch return false;
-                        sqe.prep_write(c.fd, self.buffer.data[0..self.buffer.size], 0);
-                        sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(self.buffer.idx), .fd = c.fd });
+                        sqe.prep_write(c.fd, b.buffer.data[0..b.buffer.size], 0);
+                        sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.buffer.idx), .fd = c.fd });
                         b.cursor += 1;
-                        self.buffer.ref_count += 1;
+                        b.buffer.ref_count += 1;
                     }
                 }
                 return true;
@@ -208,6 +238,56 @@ pub const Ring = struct {
         self.tasks.append(&node.node);
     }
 
+    pub fn prepareAccept(
+        self: *Ring,
+        fd: i32,
+        addr: *std.os.linux.sockaddr,
+        addr_len: *std.os.linux.socklen_t,
+    ) !void {
+        const sqe = self.getSqe() catch {
+            try self.insertTask(.{ .accept = .{
+                .sfd = fd,
+                .addr = addr,
+                .addr_len = addr_len,
+            } });
+            return;
+        };
+        sqe.prep_accept(fd, addr, addr_len, 0);
+        sqe.user_data = @bitCast(Userdata{ .op = .accept, .d = 0, .fd = 0 });
+    }
+
+    pub fn prepareRead(
+        self: *Ring,
+        fd: i32,
+        buffer: []u8,
+    ) !void {
+        const sqe = self.getSqe() catch {
+            try self.insertTask(.{ .read = .{
+                .cfd = fd,
+                .buffer = buffer,
+            } });
+            return;
+        };
+        sqe.prep_read(fd, buffer, 0);
+        sqe.user_data = @bitCast(Userdata{ .op = .read, .d = 0, .fd = fd });
+    }
+
+    pub fn prepareTimer(
+        self: *Ring,
+        fd: i32,
+        tinfo: *u64,
+    ) !void {
+        const sqe = self.getSqe() catch {
+            try self.insertTask(.{ .timer = .{
+                .tfd = fd,
+                .tinfo = tinfo,
+            } });
+            return;
+        };
+        sqe.prep_read(fd, @ptrCast(tinfo), 0);
+        sqe.user_data = @bitCast(Userdata{ .op = .timer, .d = 0, .fd = 0 });
+    }
+
     pub fn prepareOneshot(
         self: *Ring,
         fd: i32,
@@ -219,10 +299,9 @@ pub const Ring = struct {
         b.ref_count = 1;
 
         var sqe = self.getSqe() catch {
-            try self.insertTask(.{ .buffer = b, .d = .{
-                .oneshot = .{
-                    .cfd = fd,
-                },
+            try self.insertTask(.{ .oneshot = .{
+                .buffer = b,
+                .cfd = fd,
             } });
             return;
         };
@@ -243,11 +322,10 @@ pub const Ring = struct {
         for (ctx.client_manager.lookup.items) |slot| {
             if (slot.client) |c| {
                 var sqe = self.getSqe() catch {
-                    try self.insertTask(.{ .buffer = b, .d = .{
-                        .broadcast = .{
-                            .cursor = b.ref_count,
-                            .max_gen = ctx.client_manager.global_generation,
-                        },
+                    try self.insertTask(.{ .broadcast = .{
+                        .buffer = b,
+                        .cursor = b.ref_count,
+                        .max_gen = ctx.client_manager.global_generation,
                     } });
                     break;
                 };

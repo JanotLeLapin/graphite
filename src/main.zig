@@ -321,26 +321,17 @@ pub fn main() !void {
                         client.state = .handshake;
                         client.addr = addr;
 
-                        const sqe = try ring.getSqe();
-                        sqe.opcode = std.os.linux.IORING_OP.READ;
-                        sqe.prep_read(cfd, &client_manager.get(cfd).?.read_buf, 0);
-                        sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
+                        try ring.prepareRead(cfd, &client.read_buf);
                     }
 
-                    const sqe = try ring.getSqe();
-                    sqe.opcode = std.os.linux.IORING_OP.ACCEPT;
-                    sqe.prep_accept(server_fd, &addr, &addr_len, 0);
-                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.accept, .d = 0, .fd = 0 });
+                    try ring.prepareAccept(server_fd, &addr, &addr_len);
                 },
                 .sigint => {
                     std.log.info("caught sigint", .{});
                     running = false;
                 },
                 .timer => {
-                    const sqe = try ctx.ring.getSqe();
-                    sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
-                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = .timer, .d = 0, .fd = 0 });
-
+                    try ring.prepareTimer(timer_fd, &tinfo);
                     scheduler.tick(&ctx);
                 },
                 .read => {
@@ -364,10 +355,7 @@ pub fn main() !void {
 
                                 splitPackets(&ctx, client);
 
-                                const sqe = try ring.getSqe();
-                                sqe.opcode = std.os.linux.IORING_OP.READ;
-                                sqe.prep_read(cfd, client.read_buf[client.read_buf_tail..], 0);
-                                sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
+                                try ring.prepareRead(cfd, client.read_buf[client.read_buf_tail..]);
                             }
                         }
                     }
