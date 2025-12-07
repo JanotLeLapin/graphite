@@ -26,7 +26,7 @@ fn broadcastMessage(
     errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
     var json: [buf_len]u8 = undefined;
-    const size = packet.ClientPlayChatMessage.encode(
+    const size = try packet.ClientPlayChatMessage.encode(
         &.{
             .json = try std.fmt.bufPrint(
                 json[0..],
@@ -36,7 +36,7 @@ fn broadcastMessage(
             .position = .chat,
         },
         &b.data,
-    ) orelse return error.EncodingFailure;
+    );
     try ctx.ring.prepareBroadcast(ctx, b, size);
 }
 
@@ -62,7 +62,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
                 errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
                 var json: [512]u8 = undefined;
-                const size = packet.ClientStatusResponse.encode(
+                const size = try packet.ClientStatusResponse.encode(
                     &.{
                         .response = try std.fmt.bufPrint(json[0..], "{{\"version\":{{\"name\":\"" ++ status.version_name ++ "\",\"protocol\":47}},\"players\":{{\"max\":20,\"online\":{d},\"sample\":[]}},\"description\":{f}}}", .{
                             0,
@@ -70,7 +70,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
                         }),
                     },
                     b.data[0..],
-                ) orelse return error.EncodingFailure;
+                );
 
                 try ctx.ring.prepareOneshot(client.fd, b, size);
             }

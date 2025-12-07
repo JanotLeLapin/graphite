@@ -121,12 +121,12 @@ fn processPacket(
 
             var offset: usize = 0;
 
-            offset += packet.ClientLoginSuccess.encode(&.{
+            offset += try packet.ClientLoginSuccess.encode(&.{
                 .uuid = &uuid_buf,
                 .username = client.username.items,
-            }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
+            }, b.data[offset..]);
 
-            offset += packet.ClientPlayJoinGame.encode(&.{
+            offset += try packet.ClientPlayJoinGame.encode(&.{
                 .eid = 0,
                 .gamemode = .survival,
                 .dimension = .overworld,
@@ -134,16 +134,16 @@ fn processPacket(
                 .max_players = 20,
                 .level_type = "default",
                 .reduced_debug_info = 0,
-            }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
+            }, b.data[offset..]);
 
-            offset += packet.ClientPlayPlayerPositionAndLook.encode(&.{
+            offset += try packet.ClientPlayPlayerPositionAndLook.encode(&.{
                 .x = 0.0,
                 .y = 67.0,
                 .z = 0.0,
                 .yaw = 0.0,
                 .pitch = 0.0,
                 .flags = 0,
-            }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
+            }, b.data[offset..]);
 
             try ctx.ring.prepareOneshot(client.fd, b, offset);
             client.state = .play;
@@ -162,7 +162,7 @@ fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
     while (true) {
         var offset = global_offset;
 
-        const len = packet.types.VarInt.decode(client.read_buf[offset..client.read_buf_tail]) orelse break;
+        const len = packet.types.VarInt.decode(client.read_buf[offset..client.read_buf_tail]) catch break;
         offset += len.len;
 
         if (client.read_buf_tail - offset < len.value) {
@@ -171,14 +171,17 @@ fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
 
         const packet_end = offset + @as(usize, @intCast(len.value));
 
-        const id = packet.types.VarInt.decode(client.read_buf[offset..packet_end]) orelse break;
+        const id = packet.types.VarInt.decode(client.read_buf[offset..packet_end]) catch break;
         offset += id.len;
 
-        if (packet.ServerBoundPacket.decode(client.state, id.value, client.read_buf[offset..packet_end])) |p| {
-            processPacket(ctx, client, p) catch |e| {
-                std.log.debug("client: {d}, failed to process packet with id {x}: {s}", .{ client.fd, id.value, @errorName(e) });
-            };
-        }
+        const p = packet.ServerBoundPacket.decode(client.state, id.value, client.read_buf[offset..packet_end]) catch {
+            global_offset = packet_end;
+            continue;
+        };
+
+        processPacket(ctx, client, p) catch |e| {
+            std.log.debug("client: {d}, failed to process packet with id {x}: {s}", .{ client.fd, id.value, @errorName(e) });
+        };
 
         global_offset = packet_end;
     }
@@ -230,7 +233,7 @@ fn keepaliveTask(ctx: *common.Context, _: u64) void {
     const size = packet.ClientPlayKeepAlive.encode(
         &.{ .id = packet.types.VarInt{ .value = 67 } },
         &b.data,
-    ).?;
+    ) catch return;
 
     ctx.ring.prepareBroadcast(ctx, b, size) catch {
         ctx.buffer_pool.releaseBuf(b.idx);

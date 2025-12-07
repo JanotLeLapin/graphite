@@ -24,22 +24,17 @@ pub const Difficulty = enum(u8) {
     hard = 3,
 };
 
-pub const DecodeError = error{
+pub const EncodingError = error{
     OutOfBounds,
-    DecodeFailure,
+    SubImplFailed,
 };
 
-pub const EncodeError = error{
-    OutOfBounds,
-    EncodeFailure,
-};
-
-pub fn decode(comptime T: anytype, buf: []const u8) !struct { value: T, len: usize } {
+pub fn decodeValue(comptime T: anytype, buf: []const u8) !struct { value: T, len: usize } {
     switch (@typeInfo(T)) {
         .int, .float => {
             const size = @sizeOf(T);
             if (buf.len < size) {
-                return DecodeError.OutOfBounds;
+                return EncodingError.OutOfBounds;
             }
 
             const raw = std.mem.readInt(std.meta.Int(.unsigned, size * 8), buf[0..size], .big);
@@ -50,23 +45,23 @@ pub fn decode(comptime T: anytype, buf: []const u8) !struct { value: T, len: usi
                 @compileError("invalid type: " ++ @typeName(T));
             }
 
-            const string = types.String.decode(buf) orelse return DecodeError.DecodeFailure;
+            const string = types.String.decode(buf) catch return EncodingError.SubImplFailed;
             return .{ .value = string.value, .len = string.len };
         },
         .@"struct" => {
-            const val = T.decode(buf) orelse return DecodeError.DecodeFailure;
+            const val = T.decode(buf) catch return EncodingError.SubImplFailed;
             return .{ .value = T{ .value = val.value }, .len = val.len };
         },
         else => @compileError("invalid type: " ++ @typeName(T)),
     }
 }
 
-pub fn encode(comptime T: anytype, v: T, buf: []u8) !usize {
+pub fn encodeValue(comptime T: anytype, v: T, buf: []u8) !usize {
     switch (@typeInfo(T)) {
         .int, .float => {
             const size = @sizeOf(T);
             if (buf.len < size) {
-                return EncodeError.OutOfBounds;
+                return EncodingError.OutOfBounds;
             }
 
             const raw: std.meta.Int(.unsigned, size * 8) = @bitCast(v);
@@ -77,7 +72,7 @@ pub fn encode(comptime T: anytype, v: T, buf: []u8) !usize {
             const TagType = @typeInfo(T).@"enum".tag_type;
             const size = @sizeOf(TagType);
             if (buf.len < size) {
-                return EncodeError.OutOfBounds;
+                return EncodingError.OutOfBounds;
             }
 
             std.mem.writeInt(TagType, buf[0..size], @intFromEnum(v), .big);
@@ -88,32 +83,32 @@ pub fn encode(comptime T: anytype, v: T, buf: []u8) !usize {
                 @compileError("invalid type: " ++ @typeName(T));
             }
 
-            const size = types.String.encode(v, buf) orelse return EncodeError.EncodeFailure;
+            const size = types.String.encode(v, buf) catch return EncodingError.SubImplFailed;
             return size;
         },
         .@"struct" => {
-            const size = T.encode(v.value, buf) orelse return EncodeError.EncodeFailure;
+            const size = T.encode(v.value, buf) catch return EncodingError.SubImplFailed;
             return size;
         },
         else => @compileError("invalid type: " ++ @typeName(T)),
     }
 }
 
-fn genDecodeBasic(comptime T: anytype) fn ([]const u8) ?T {
+fn genDecodeBasic(comptime T: anytype) fn ([]const u8) EncodingError!T {
     return struct {
-        fn decodeFn(buf: []const u8) ?T {
+        fn decodeFn(buf: []const u8) !T {
             var res: T = undefined;
             var offset: usize = 0;
 
             inline for (std.meta.fields(T)) |field| {
                 if (offset >= buf.len) {
-                    return null;
+                    return EncodingError.OutOfBounds;
                 }
 
                 const rem = buf[offset..];
                 const FieldType = field.type;
 
-                const decoded = decode(FieldType, rem) catch return null;
+                const decoded = try decodeValue(FieldType, rem);
                 @field(res, field.name) = decoded.value;
                 offset += decoded.len;
             }
@@ -126,24 +121,24 @@ fn genDecodeBasic(comptime T: anytype) fn ([]const u8) ?T {
 fn genEncodeBasic(
     comptime T: anytype,
     comptime packet_id: comptime_int,
-) fn (*const T, []u8) ?usize {
+) fn (*const T, []u8) EncodingError!usize {
     return struct {
-        fn encodeFn(self: *const T, buf: []u8) ?usize {
+        fn encodeFn(self: *const T, buf: []u8) !usize {
             var offset: usize = 5;
-            offset += types.VarInt.encode(packet_id, buf[offset..]) orelse return null;
+            offset += types.VarInt.encode(packet_id, buf[offset..]) catch return EncodingError.OutOfBounds;
 
             inline for (std.meta.fields(T)) |field| {
                 if (offset >= buf.len) {
-                    return null;
+                    return EncodingError.OutOfBounds;
                 }
 
                 const rem = buf[offset..];
                 const FieldType = field.type;
 
-                offset += encode(FieldType, @field(self, field.name), rem) catch return null;
+                offset += try encodeValue(FieldType, @field(self, field.name), rem);
             }
 
-            const size = types.VarInt.encode(@intCast(offset - 5), buf) orelse return null;
+            const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;
             @memmove(buf[size .. size + offset], buf[5 .. 5 + offset]);
 
             return size + offset - 5;
@@ -157,7 +152,7 @@ pub const ServerHandshake = struct {
     server_port: u16,
     next_state: u8,
 
-    pub fn decode(buf: []const u8) ?@This() {
+    pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
     }
 };
@@ -165,7 +160,7 @@ pub const ServerHandshake = struct {
 pub const ServerStatusPing = struct {
     payload: u64,
 
-    pub fn decode(buf: []const u8) ?@This() {
+    pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
     }
 };
@@ -173,7 +168,7 @@ pub const ServerStatusPing = struct {
 pub const ServerLoginStart = struct {
     username: []const u8,
 
-    pub fn decode(buf: []const u8) ?@This() {
+    pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
     }
 };
@@ -181,7 +176,7 @@ pub const ServerLoginStart = struct {
 pub const ServerPlayChatMessage = struct {
     message: []const u8,
 
-    pub fn decode(buf: []const u8) ?@This() {
+    pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
     }
 };
@@ -189,7 +184,7 @@ pub const ServerPlayChatMessage = struct {
 pub const ServerPlayPlayer = struct {
     on_ground: u8,
 
-    pub fn decode(buf: []const u8) ?@This() {
+    pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
     }
 };
@@ -200,7 +195,7 @@ pub const ServerPlayPlayerPosition = struct {
     z: f64,
     on_ground: u8,
 
-    pub fn decode(buf: []const u8) ?@This() {
+    pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
     }
 };
@@ -210,7 +205,7 @@ pub const ServerPlayPlayerLook = struct {
     pitch: f32,
     on_ground: u8,
 
-    pub fn decode(buf: []const u8) ?@This() {
+    pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
     }
 };
@@ -223,9 +218,13 @@ pub const ServerPlayPlayerPositionAndLook = struct {
     pitch: f32,
     on_ground: u8,
 
-    pub fn decode(buf: []const u8) ?@This() {
+    pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
     }
+};
+
+pub const ServerBoundPacketError = error{
+    BadPacketId,
 };
 
 pub const ServerBoundPacket = union(enum) {
@@ -243,25 +242,25 @@ pub const ServerBoundPacket = union(enum) {
         state: common.client.ClientState,
         packet_id: i32,
         buf: []const u8,
-    ) ?ServerBoundPacket {
+    ) !ServerBoundPacket {
         return switch (state) {
-            .handshake => .{ .handshake = ServerHandshake.decode(buf) orelse return null },
+            .handshake => .{ .handshake = try ServerHandshake.decode(buf) },
             .status => switch (packet_id) {
                 0x00 => .{ .status_request = undefined },
-                0x01 => .{ .status_ping = ServerStatusPing.decode(buf) orelse return null },
-                else => return null,
+                0x01 => .{ .status_ping = try ServerStatusPing.decode(buf) },
+                else => return ServerBoundPacketError.BadPacketId,
             },
             .login => switch (packet_id) {
-                0x00 => .{ .login_start = ServerLoginStart.decode(buf) orelse return null },
-                else => return null,
+                0x00 => .{ .login_start = try ServerLoginStart.decode(buf) },
+                else => return ServerBoundPacketError.BadPacketId,
             },
             .play => switch (packet_id) {
-                0x01 => .{ .play_chat_message = ServerPlayChatMessage.decode(buf) orelse return null },
-                0x03 => .{ .play_player = ServerPlayPlayer.decode(buf) orelse return null },
-                0x04 => .{ .play_player_position = ServerPlayPlayerPosition.decode(buf) orelse return null },
-                0x05 => .{ .play_player_look = ServerPlayPlayerLook.decode(buf) orelse return null },
-                0x06 => .{ .play_player_position_and_look = ServerPlayPlayerPositionAndLook.decode(buf) orelse return null },
-                else => return null,
+                0x01 => .{ .play_chat_message = try ServerPlayChatMessage.decode(buf) },
+                0x03 => .{ .play_player = try ServerPlayPlayer.decode(buf) },
+                0x04 => .{ .play_player_position = try ServerPlayPlayerPosition.decode(buf) },
+                0x05 => .{ .play_player_look = try ServerPlayPlayerLook.decode(buf) },
+                0x06 => .{ .play_player_position_and_look = try ServerPlayPlayerPositionAndLook.decode(buf) },
+                else => return ServerBoundPacketError.BadPacketId,
             },
         };
     }
@@ -270,7 +269,7 @@ pub const ServerBoundPacket = union(enum) {
 pub const ClientStatusResponse = struct {
     response: []const u8,
 
-    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x00)(self, buf);
     }
 };
@@ -279,7 +278,7 @@ pub const ClientLoginSuccess = struct {
     uuid: []const u8,
     username: []const u8,
 
-    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x02)(self, buf);
     }
 };
@@ -287,7 +286,7 @@ pub const ClientLoginSuccess = struct {
 pub const ClientPlayKeepAlive = struct {
     id: types.VarInt,
 
-    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x00)(self, buf);
     }
 };
@@ -301,7 +300,7 @@ pub const ClientPlayJoinGame = struct {
     level_type: []const u8,
     reduced_debug_info: u8,
 
-    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x01)(self, buf);
     }
 };
@@ -314,7 +313,7 @@ pub const ClientPlayChatMessage = struct {
         hotbar = 2,
     },
 
-    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x02)(self, buf);
     }
 };
@@ -327,7 +326,7 @@ pub const ClientPlayPlayerPositionAndLook = struct {
     pitch: f32,
     flags: u8,
 
-    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x08)(self, buf);
     }
 };
@@ -340,7 +339,7 @@ pub const ClientPlaySoundEffect = struct {
     volume: f32,
     pitch: u8,
 
-    pub fn encode(self: *const @This(), buf: []u8) ?usize {
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x29)(self, buf);
     }
 };

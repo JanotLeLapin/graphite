@@ -1,5 +1,9 @@
 const std = @import("std");
 
+pub const VarlenError = error{
+    TooBig,
+};
+
 pub fn Varlen(comptime T: type, comptime n: usize) type {
     const ShiftType = std.math.Log2Int(T);
     return struct {
@@ -10,7 +14,7 @@ pub fn Varlen(comptime T: type, comptime n: usize) type {
             len: usize,
         };
 
-        pub fn decode(buf: []const u8) ?DecodedType {
+        pub fn decode(buf: []const u8) !DecodedType {
             var res = DecodedType{
                 .value = 0,
                 .len = 0,
@@ -28,10 +32,10 @@ pub fn Varlen(comptime T: type, comptime n: usize) type {
                 }
             }
 
-            return null;
+            return VarlenError.TooBig;
         }
 
-        pub fn encode(value: T, buf: []u8) ?usize {
+        pub fn encode(value: T, buf: []u8) !usize {
             var v = value;
             var b: u8 = 0;
             for (0..@min(n, buf.len)) |i| {
@@ -48,7 +52,7 @@ pub fn Varlen(comptime T: type, comptime n: usize) type {
                 }
             }
 
-            return null;
+            return VarlenError.TooBig;
         }
     };
 }
