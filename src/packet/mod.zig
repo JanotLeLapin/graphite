@@ -1,3 +1,5 @@
+// This file heavily relies on wiki.vg
+
 const std = @import("std");
 
 pub const common = @import("../common/mod.zig");
@@ -294,7 +296,12 @@ pub const ClientLoginSuccess = struct {
     }
 };
 
+/// The server will frequently send out a keep-alive, each containing a random ID.
+/// The client must respond with the same packet.
+/// If the client does not respond to them for over 30 seconds, the server kicks the client.
+/// Vice versa, if the server does not send any keep-alives for 20 seconds, the client will disconnect and yields a "Timed out" exception.
 pub const ClientPlayKeepAlive = struct {
+    /// Keep alive ID
     id: types.VarInt,
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
@@ -307,6 +314,7 @@ pub const ClientPlayJoinGame = struct {
     gamemode: u8,
     dimension: Dimension,
     difficulty: Difficulty,
+    /// Used by the client to draw the player list
     max_players: u8,
     level_type: []const u8,
     reduced_debug_info: bool,
@@ -316,6 +324,8 @@ pub const ClientPlayJoinGame = struct {
     }
 };
 
+/// Identifying the difference between Chat/System Message is important as it helps respect the user's chat visibility options.
+/// While Position 2 accepts json formatting it will not display, old style formatting works.
 pub const ClientPlayChatMessage = struct {
     json: []const u8,
     position: enum(u8) {
@@ -329,15 +339,53 @@ pub const ClientPlayChatMessage = struct {
     }
 };
 
+/// Time is based on ticks, where 20 ticks happen every second. There are 24000 ticks in a day, making Minecraft days exactly 20 minutes long.
+/// The time of day is based on the timestamp modulo 24000. 0 is sunrise, 6000 is noon, 12000 is sunset, and 18000 is midnight.
+/// The default SMP server increments the time by 20 every second.
 pub const ClientPlayTimeUpdate = struct {
-    world_age: usize,
-    time_of_day: usize,
+    /// World age in ticks; not changed by server commands
+    world_age: i64,
+    /// The world (or region) time, in ticks. If negative the sun will stop moving at the Math.abs of the time
+    time_of_day: i64,
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x03)(self, buf);
     }
 };
 
+/// Sent by the server to update/set the health of the player it is sent to.
+/// Food acts as a food “overcharge”.
+/// Food values will not decrease while the saturation is over zero.
+/// Players logging in automatically get a saturation of 5.0.
+/// Eating food increases the saturation as well as the food bar.
+pub const ClientPlayUpdateHealth = struct {
+    /// 0 or less = dead, 20 = full HP
+    health: f32,
+    /// 0–20
+    food: types.VarInt,
+    /// Seems to vary from 0.0 to 5.0 in integer increments
+    food_saturation: f32,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x06)(self, buf);
+    }
+};
+
+/// To change the player's dimension (overworld/nether/end), send them a respawn packet with the appropriate dimension, followed by prechunks/chunks for the new dimension, and finally a position and look packet.
+/// You do not need to unload chunks, the client will do it automatically.
+pub const ClientPlayRespawn = struct {
+    dimension: i32,
+    difficulty: Difficulty,
+    gamemode: GamemodeType,
+    /// Same as in Join Game
+    level_type: []const u8,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x07)(self, buf);
+    }
+};
+
+/// https://minecraft.wiki/w/Protocol?oldid=2772100#Player_Position_And_Look
 pub const ClientPlayPlayerPositionAndLook = struct {
     x: f64,
     y: f64,
@@ -351,6 +399,86 @@ pub const ClientPlayPlayerPositionAndLook = struct {
     }
 };
 
+/// Sent whenever an entity should change animation.
+pub const ClientPlayAnimation = struct {
+    entity_id: types.VarInt,
+    animation: enum(u8) {
+        swing_arm = 0,
+        take_damage = 1,
+        leave_bed = 2,
+        eat_food = 3,
+        critical_effect = 4,
+        magic_critical_effect = 5,
+    },
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x0B)(self, buf);
+    }
+};
+
+/// Sent by the server when someone picks up an item lying on the ground — its sole purpose appears to be the animation of the item flying towards you. It doesn't destroy the entity in the client memory, and it doesn't add it to your inventory. The server only checks for items to be picked up after each Player Position (and Player Position And Look) packet sent by the client.
+pub const ClientPlayCollectItem = struct {
+    collected_eid: types.VarInt,
+    collector_eid: types.VarInt,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x0D)(self, buf);
+    }
+};
+
+/// Spawns one or more experience orbs.
+pub const ClientPlaySpawnExperienceOrb = struct {
+    entity_id: types.VarInt,
+    x: i32,
+    y: i32,
+    z: i32,
+    /// The amount of experience this orb will reward once collected
+    count: i16,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x11)(self, buf);
+    }
+};
+
+/// Velocity is believed to be in units of 1/8000 of a block per server tick (50ms); for example, -1343 would move (-1343 / 8000) = −0.167875 blocks per tick (or −3,3575 blocks per second).
+pub const ClientPlayEntityVelocity = struct {
+    entity_id: types.VarInt,
+    velocity_x: i32,
+    vel_y: i32,
+    vel_z: i32,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x12)(self, buf);
+    }
+};
+
+/// This packet may be used to initialize an entity.
+/// For player entities, either this packet or any move/look packet is sent every game tick.
+/// So the meaning of this packet is basically that the entity did not move/look since the last such packet.
+pub const ClientPlayEntity = struct {
+    entity_id: types.VarInt,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x14)(self, buf);
+    }
+};
+
+/// This packet is sent by the server when an entity moves less then 4 blocks; if an entity moves more than 4 blocks Entity Teleport should be sent instead.
+/// This packet allows at most four blocks movement in any direction, because byte range is from -128 to 127.
+pub const ClientPlayEntityRelativeMove = struct {
+    entity_id: types.VarInt,
+    delta_x: i8,
+    delta_y: i8,
+    delta_z: i8,
+    on_ground: bool,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x15)(self, buf);
+    }
+};
+
+/// Used to play a sound effect on the client.
+/// Custom sounds may be added by resource packs.
 pub const ClientPlaySoundEffect = struct {
     sound_name: []const u8,
     x: i32,
@@ -364,6 +492,8 @@ pub const ClientPlaySoundEffect = struct {
     }
 };
 
+/// Sent by the server before it disconnects a client.
+/// The client assumes that the server has already closed the connection by the time the packet arrives.
 pub const ClientPlayDisconnect = struct {
     reason: []const u8,
 
@@ -380,7 +510,9 @@ pub const ClientPlayTitle = union(enum) {
         stay: i32,
         fade_out: i32,
     },
+    /// Makes the title disappear, but if you run times again the same title will appear.
     hide: void,
+    /// Erases the text
     reset: void,
 
     inline fn encodeChat(
