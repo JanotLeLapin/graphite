@@ -180,7 +180,7 @@ pub const Ring = struct {
         const head = self.sq_head.load(.acquire);
         const mask = self.sq_mask.*;
 
-        if (tail -% head > self.sq_entries.*) {
+        if (tail -% head >= self.sq_entries.*) {
             return RingError.SubmissionQueueFull;
         }
 
