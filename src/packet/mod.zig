@@ -44,6 +44,9 @@ pub fn decodeValue(comptime T: anytype, buf: []const u8) !struct { value: T, len
             const raw = std.mem.readInt(std.meta.Int(.unsigned, size * 8), buf[0..size], .big);
             return .{ .value = @bitCast(raw), .len = size };
         },
+        .bool => {
+            return .{ .value = buf[0] > 0, .len = 1 };
+        },
         .pointer => |p| {
             if (p.size != .slice or !p.is_const or p.child != u8) {
                 @compileError("invalid type: " ++ @typeName(T));
@@ -71,6 +74,10 @@ pub fn encodeValue(comptime T: anytype, v: T, buf: []u8) !usize {
             const raw: std.meta.Int(.unsigned, size * 8) = @bitCast(v);
             buf[0..size].* = @bitCast(@byteSwap(raw));
             return size;
+        },
+        .bool => {
+            buf[0] = @intFromBool(v);
+            return 1;
         },
         .@"enum" => {
             const TagType = @typeInfo(T).@"enum".tag_type;
@@ -302,7 +309,7 @@ pub const ClientPlayJoinGame = struct {
     difficulty: Difficulty,
     max_players: u8,
     level_type: []const u8,
-    reduced_debug_info: u8,
+    reduced_debug_info: bool,
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
         return genEncodeBasic(@This(), 0x01)(self, buf);

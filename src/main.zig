@@ -133,7 +133,7 @@ fn processPacket(
                 .difficulty = .normal,
                 .max_players = 20,
                 .level_type = "default",
-                .reduced_debug_info = 0,
+                .reduced_debug_info = false,
             }, b.data[offset..]);
 
             offset += try packet.ClientPlayPlayerPositionAndLook.encode(&.{
