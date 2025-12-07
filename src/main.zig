@@ -104,7 +104,6 @@ fn processPacket(
 
                 try b.prepareOneshot(ctx.ring, client.fd, 10);
             }
-            _ = try ctx.ring.submit();
         },
         .login_start => {
             client.username = std.ArrayListUnmanaged(u8).initBuffer(&client.username_buf);
@@ -232,7 +231,7 @@ fn keepaliveTask(ctx: *common.Context, _: u64) void {
         &b.data,
     ).?;
 
-    b.prepareBroadcast(ctx.ring, ctx.client_manager.lookup.items, size) catch {
+    b.prepareBroadcast(ctx.ring, ctx.client_manager, size) catch {
         ctx.buffer_pool.releaseBuf(b.idx);
         return;
     };
@@ -260,7 +259,7 @@ pub fn main() !void {
 
     std.log.info("server listening on port {d}.", .{PORT});
 
-    var ring = try common.uring.Ring.init(URING_QUEUE_ENTRIES);
+    var ring = try common.uring.Ring.init(gpa.allocator(), URING_QUEUE_ENTRIES);
     defer ring.deinit();
 
     var buffer_pool = try common.buffer.BufferPool(4096).init(gpa.allocator(), 64);
@@ -302,97 +301,97 @@ pub fn main() !void {
 
     _ = try ring.submit();
 
-    while (true) {
-        const cqe = try ring.waitCqe();
+    var running = true;
+    while (running) {
+        var cqe = try ring.waitCqe();
 
-        const ud: common.uring.Userdata = @bitCast(cqe.user_data);
-        switch (ud.op) {
-            .accept => {
-                if (cqe.res < 0) {
-                    const errcode: usize = @intCast(-cqe.res);
-                    const err = std.posix.errno(errcode);
-                    std.log.err("cqe error: accept: {s}", .{@tagName(err)});
-                } else {
-                    const cfd = cqe.res;
-                    std.log.debug("client: {d} connected", .{cfd});
+        while (true) {
+            const ud: common.uring.Userdata = @bitCast(cqe.user_data);
+            switch (ud.op) {
+                .accept => {
+                    if (cqe.res < 0) {
+                        const errcode: usize = @intCast(-cqe.res);
+                        const err = std.posix.errno(errcode);
+                        std.log.err("cqe error: accept: {s}", .{@tagName(err)});
+                    } else {
+                        const cfd = cqe.res;
+                        std.log.debug("client: {d} connected", .{cfd});
 
-                    var client = try client_manager.add(cfd);
-                    client.state = .handshake;
-                    client.addr = addr;
+                        var client = try client_manager.add(cfd);
+                        client.state = .handshake;
+                        client.addr = addr;
+
+                        const sqe = try ring.getSqe();
+                        sqe.opcode = std.os.linux.IORING_OP.READ;
+                        sqe.prep_read(cfd, &client_manager.get(cfd).?.read_buf, 0);
+                        sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
+                    }
 
                     const sqe = try ring.getSqe();
-                    sqe.opcode = std.os.linux.IORING_OP.READ;
-                    sqe.prep_read(cfd, &client_manager.get(cfd).?.read_buf, 0);
-                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
-                }
+                    sqe.opcode = std.os.linux.IORING_OP.ACCEPT;
+                    sqe.prep_accept(server_fd, &addr, &addr_len, 0);
+                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.accept, .d = 0, .fd = 0 });
+                },
+                .sigint => {
+                    std.log.info("caught sigint", .{});
+                    running = false;
+                },
+                .timer => {
+                    const sqe = try ctx.ring.getSqe();
+                    sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
+                    sqe.user_data = @bitCast(common.uring.Userdata{ .op = .timer, .d = 0, .fd = 0 });
 
-                const sqe = try ring.getSqe();
-                sqe.opcode = std.os.linux.IORING_OP.ACCEPT;
-                sqe.prep_accept(server_fd, &addr, &addr_len, 0);
-                sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.accept, .d = 0, .fd = 0 });
+                    scheduler.tick(&ctx);
+                },
+                .read => {
+                    const cfd = ud.fd;
+                    if (cqe.res < 0) {
+                        const errcode: usize = @intCast(-cqe.res);
+                        const err = std.posix.errno(errcode);
+                        std.log.err("cqe error: read: {s}", .{@tagName(err)});
+                        client_manager.remove(cfd);
+                    } else {
+                        if (client_manager.get(cfd)) |client| {
+                            const bytes: usize = @intCast(cqe.res);
+                            if (0 == bytes) {
+                                if (client.state == .play) {
+                                    dispatch(&ctx, "onQuit", .{client});
+                                }
+                                client_manager.remove(cfd);
+                                std.log.debug("client: {d} disconnected", .{cfd});
+                            } else {
+                                client.read_buf_tail += bytes;
 
-                _ = try ctx.ring.submit();
-            },
-            .sigint => {
-                std.log.info("caught sigint", .{});
-                break;
-            },
-            .timer => {
-                const sqe = try ctx.ring.getSqe();
-                sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
-                sqe.user_data = @bitCast(common.uring.Userdata{ .op = .timer, .d = 0, .fd = 0 });
+                                splitPackets(&ctx, client);
 
-                scheduler.tick(&ctx);
-                _ = try ctx.ring.submit();
-            },
-            .read => {
-                const cfd = ud.fd;
-                if (cqe.res < 0) {
-                    const errcode: usize = @intCast(-cqe.res);
-                    const err = std.posix.errno(errcode);
-                    std.log.err("cqe error: read: {s}", .{@tagName(err)});
-                    client_manager.remove(cfd);
-                    continue;
-                }
-
-                const client = client_manager.get(cfd).?;
-                const bytes: usize = @intCast(cqe.res);
-                if (0 == bytes) {
-                    if (client.state == .play) {
-                        dispatch(&ctx, "onQuit", .{client});
+                                const sqe = try ring.getSqe();
+                                sqe.opcode = std.os.linux.IORING_OP.READ;
+                                sqe.prep_read(cfd, client.read_buf[client.read_buf_tail..], 0);
+                                sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
+                            }
+                        }
                     }
-                    client_manager.remove(cfd);
-                    std.log.debug("client: {d} disconnected", .{cfd});
-                    continue;
-                }
-
-                client.read_buf_tail += bytes;
-
-                splitPackets(&ctx, client);
-
-                const sqe = try ring.getSqe();
-                sqe.opcode = std.os.linux.IORING_OP.READ;
-                sqe.prep_read(cfd, client.read_buf[client.read_buf_tail..], 0);
-                sqe.user_data = @bitCast(common.uring.Userdata{ .op = common.uring.UserdataOp.read, .d = 0, .fd = cfd });
-
-                _ = try ctx.ring.submit();
-            },
-            .write => {
-                const cfd = ud.fd;
-                if (cqe.res < 0) {
-                    const errcode: usize = @intCast(-cqe.res);
-                    const err = std.posix.errno(errcode);
-                    std.log.err("cqe error: write: {s}", .{@tagName(err)});
-                    client_manager.remove(cfd);
-                    continue;
-                }
-
-                const b = ctx.buffer_pool.buffers[@intCast(ud.d)];
-                b.ref_count -= 1;
-                if (0 == b.ref_count) {
-                    ctx.buffer_pool.releaseBuf(@intCast(ud.d));
-                }
-            },
+                },
+                .write => {
+                    const cfd = ud.fd;
+                    if (cqe.res < 0) {
+                        const errcode: usize = @intCast(-cqe.res);
+                        const err = std.posix.errno(errcode);
+                        std.log.err("cqe error: write: {s}", .{@tagName(err)});
+                        client_manager.remove(cfd);
+                    } else {
+                        const b = ctx.buffer_pool.buffers[@intCast(ud.d)];
+                        b.ref_count -= 1;
+                        if (0 == b.ref_count) {
+                            ctx.buffer_pool.releaseBuf(@intCast(ud.d));
+                        }
+                    }
+                },
+            }
+            cqe = ring.peekCqe() orelse break;
         }
+
+        _ = try ring.pump(&ctx);
+        _ = try ring.submit();
     }
 }

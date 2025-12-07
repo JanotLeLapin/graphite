@@ -37,7 +37,7 @@ fn broadcastMessage(
         },
         &b.data,
     ) orelse return error.EncodingFailure;
-    try b.prepareBroadcast(ctx.ring, ctx.client_manager.lookup.items, size);
+    try b.prepareBroadcast(ctx.ring, ctx.client_manager, size);
 }
 
 pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {

@@ -1,5 +1,9 @@
 const std = @import("std");
 
+const Buffer = @import("buffer.zig").Buffer(4096);
+const client = @import("client.zig");
+const Context = @import("mod.zig").Context;
+
 pub const UserdataOp = enum(u4) {
     accept,
     sigint,
@@ -12,6 +16,37 @@ pub const Userdata = packed struct {
     op: UserdataOp,
     d: u28,
     fd: i32,
+};
+
+pub const RingTask = struct {
+    buffer: *Buffer,
+    d: union(enum) {
+        broadcast: struct {
+            cursor: usize,
+            max_gen: u64,
+        },
+    },
+
+    pub fn pump(
+        self: *RingTask,
+        ring: *Ring,
+        clients: []client.ClientSlot,
+    ) !bool {
+        switch (self.d) {
+            .broadcast => |*b| {
+                for (clients[b.cursor..]) |slot| {
+                    if (slot.client) |c| {
+                        var sqe = ring.getSqe() catch return false;
+                        sqe.prep_write(c.fd, self.buffer.data[0..self.buffer.size], 0);
+                        sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(self.buffer.idx), .fd = c.fd });
+                        b.cursor += 1;
+                        self.buffer.ref_count += 1;
+                    }
+                }
+                return true;
+            },
+        }
+    }
 };
 
 pub const RingError = error{
@@ -39,7 +74,10 @@ pub const Ring = struct {
     cq_entries: *const u32,
     cqes: [*]std.os.linux.io_uring_cqe,
 
-    pub fn init(entries: u32) !Ring {
+    tasks: std.ArrayList(RingTask),
+    task_alloc: std.mem.Allocator,
+
+    pub fn init(alloc: std.mem.Allocator, entries: u32) !Ring {
         var params = std.mem.zeroes(std.os.linux.io_uring_params);
 
         const fd: i32 = @bitCast(@as(u32, @truncate(std.os.linux.io_uring_setup(entries, &params))));
@@ -87,6 +125,8 @@ pub const Ring = struct {
             .cq_mask = @ptrCast(@alignCast(sq_ptr.ptr + params.cq_off.ring_mask)),
             .cq_entries = @ptrCast(@alignCast(sq_ptr.ptr + params.cq_off.ring_entries)),
             .cqes = @ptrCast(@alignCast(sq_ptr.ptr + params.cq_off.cqes)),
+            .tasks = try std.ArrayList(RingTask).initCapacity(alloc, 8),
+            .task_alloc = alloc,
         };
     }
 
@@ -146,9 +186,22 @@ pub const Ring = struct {
         return self.peekCqe() orelse RingError.CompletionQueueEmpty;
     }
 
+    pub fn pump(self: *Ring, ctx: *Context) !void {
+        while (self.tasks.items.len > 0) {
+            const finished = try self.tasks.items[0].pump(self, ctx.client_manager.lookup.items);
+
+            if (finished) {
+                _ = self.tasks.orderedRemove(0);
+            } else {
+                break;
+            }
+        }
+    }
+
     pub fn deinit(self: *Ring) void {
         std.posix.close(self.fd);
         std.posix.munmap(self.sqes_mmap);
         std.posix.munmap(self.sq_mmap);
+        self.tasks.deinit(self.task_alloc);
     }
 };

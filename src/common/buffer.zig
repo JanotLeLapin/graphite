@@ -37,16 +37,25 @@ pub fn Buffer(comptime size: comptime_int) type {
         pub fn prepareBroadcast(
             self: *@This(),
             ring: *uring.Ring,
-            clients: []client.ClientSlot,
+            client_manager: *client.ClientManager,
             len: usize,
         ) !void {
             self.t = .broadcast;
             self.size = len;
             self.ref_count = 0;
 
-            for (clients) |slot| {
+            for (client_manager.lookup.items) |slot| {
                 if (slot.client) |c| {
-                    var sqe = ring.getSqe() catch break;
+                    var sqe = ring.getSqe() catch {
+                        try ring.tasks.append(ring.task_alloc, .{
+                            .buffer = self,
+                            .d = .{ .broadcast = .{
+                                .cursor = self.ref_count,
+                                .max_gen = client_manager.global_generation,
+                            } },
+                        });
+                        break;
+                    };
                     sqe.prep_write(c.fd, self.data[0..len], 0);
                     sqe.user_data = @bitCast(uring.Userdata{ .op = .write, .d = @intCast(self.idx), .fd = c.fd });
                     self.ref_count += 1;
