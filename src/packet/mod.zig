@@ -343,3 +343,48 @@ pub const ClientPlaySoundEffect = struct {
         return genEncodeBasic(@This(), 0x29)(self, buf);
     }
 };
+
+pub const ClientPlayTitle = union(enum) {
+    set_title: []const u8,
+    set_subtitle: []const u8,
+    set_times: struct {
+        fade_in: i32,
+        stay: i32,
+        fade_out: i32,
+    },
+    hide: void,
+    reset: void,
+
+    inline fn encodeChat(
+        buf: []u8,
+        action: u8,
+        chat: []const u8,
+    ) !usize {
+        var offset: usize = 0;
+        offset += try encodeValue(u8, action, buf[offset..]);
+        offset += try encodeValue([]const u8, chat, buf[offset..]);
+        return offset;
+    }
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        var offset: usize = 5;
+        offset += types.VarInt.encode(0x45, buf[offset..]) catch return EncodingError.OutOfBounds;
+        switch (self.*) {
+            .set_title => |c| offset += try encodeChat(buf[offset..], 0, c),
+            .set_subtitle => |c| offset += try encodeChat(buf[offset..], 1, c),
+            .set_times => |t| {
+                offset += try encodeValue(u8, 2, buf[offset..]);
+                offset += try encodeValue(i32, t.fade_in, buf[offset..]);
+                offset += try encodeValue(i32, t.stay, buf[offset..]);
+                offset += try encodeValue(i32, t.fade_out, buf[offset..]);
+            },
+            .hide => offset += try encodeValue(u8, 3, buf[offset..]),
+            .reset => offset += try encodeValue(u8, 4, buf[offset..]),
+        }
+
+        const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;
+        @memmove(buf[size .. size + offset], buf[5 .. 5 + offset]);
+
+        return size + offset - 5;
+    }
+};
