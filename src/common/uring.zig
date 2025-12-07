@@ -63,7 +63,7 @@ pub const RingTask = union(enum) {
             .read => |*r| {
                 var sqe = ring.getSqe() catch return false;
                 sqe.prep_read(r.cfd, r.buffer, 0);
-                sqe.user_data = @bitCast(Userdata{ .op = .read, .d = 0, .fd = 0 });
+                sqe.user_data = @bitCast(Userdata{ .op = .read, .d = 0, .fd = r.cfd });
                 return true;
             },
             .oneshot => |*o| {
