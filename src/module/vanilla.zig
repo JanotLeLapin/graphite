@@ -37,7 +37,7 @@ fn broadcastMessage(
         },
         &b.data,
     ) orelse return error.EncodingFailure;
-    try b.prepareBroadcast(ctx.ring, ctx.client_manager, size);
+    try ctx.ring.prepareBroadcast(ctx, b, size);
 }
 
 pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
@@ -72,7 +72,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
                     b.data[0..],
                 ) orelse return error.EncodingFailure;
 
-                try b.prepareOneshot(ctx.ring, client.fd, size);
+                try ctx.ring.prepareOneshot(client.fd, b, size);
             }
             _ = try ctx.ring.submit();
         }

@@ -143,7 +143,7 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
         &b.data,
     ).?;
 
-    b.prepareOneshot(ctx.ring, noteData.client_fd, size) catch {
+    ctx.ring.prepareOneshot(noteData.client_fd, b, size) catch {
         ctx.buffer_pool.releaseBuf(b.idx);
         return;
     };

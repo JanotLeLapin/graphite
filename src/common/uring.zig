@@ -21,6 +21,9 @@ pub const Userdata = packed struct {
 pub const RingTask = struct {
     buffer: *Buffer,
     d: union(enum) {
+        oneshot: struct {
+            cfd: i32,
+        },
         broadcast: struct {
             cursor: usize,
             max_gen: u64,
@@ -33,6 +36,12 @@ pub const RingTask = struct {
         clients: []client.ClientSlot,
     ) !bool {
         switch (self.d) {
+            .oneshot => |o| {
+                var sqe = ring.getSqe() catch return false;
+                sqe.prep_write(o.cfd, self.buffer.data[0..self.buffer.size], 0);
+                sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(self.buffer.idx), .fd = o.cfd });
+                return true;
+            },
             .broadcast => |*b| {
                 for (clients[b.cursor..]) |slot| {
                     if (slot.client) |c| {
@@ -57,6 +66,7 @@ pub const RingTaskNode = struct {
 pub const RingError = error{
     SubmissionQueueFull,
     CompletionQueueEmpty,
+    ZeroBroadcast,
 };
 
 pub const Ring = struct {
@@ -196,6 +206,57 @@ pub const Ring = struct {
         node.data = task;
         node.node.next = null;
         self.tasks.append(&node.node);
+    }
+
+    pub fn prepareOneshot(
+        self: *Ring,
+        fd: i32,
+        b: *Buffer,
+        size: usize,
+    ) !void {
+        b.t = .oneshot;
+        b.size = size;
+        b.ref_count = 1;
+
+        var sqe = self.getSqe() catch {
+            try self.insertTask(.{ .buffer = b, .d = .{
+                .oneshot = .{
+                    .cfd = fd,
+                },
+            } });
+            return;
+        };
+        sqe.prep_write(fd, b.data[0..size], 0);
+        sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.idx), .fd = fd });
+    }
+
+    pub fn prepareBroadcast(
+        self: *Ring,
+        ctx: *Context,
+        b: *Buffer,
+        size: usize,
+    ) !void {
+        b.t = .broadcast;
+        b.size = size;
+        b.ref_count = 0;
+
+        for (ctx.client_manager.lookup.items) |slot| {
+            if (slot.client) |c| {
+                var sqe = self.getSqe() catch {
+                    try self.insertTask(.{ .buffer = b, .d = .{
+                        .broadcast = .{
+                            .cursor = b.ref_count,
+                            .max_gen = ctx.client_manager.global_generation,
+                        },
+                    } });
+                    break;
+                };
+                sqe.prep_write(c.fd, b.data[0..size], 0);
+                sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.idx), .fd = c.fd });
+                b.ref_count += 1;
+            }
+        }
+        if (b.ref_count == 0) return RingError.ZeroBroadcast;
     }
 
     pub fn pump(self: *Ring, ctx: *Context) !void {

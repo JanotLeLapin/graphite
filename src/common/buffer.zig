@@ -3,8 +3,6 @@ const std = @import("std");
 const client = @import("client.zig");
 const uring = @import("uring.zig");
 
-pub const BufferError = error{ZeroBroadcast};
-
 pub const BufferType = union(enum) {
     broadcast,
     oneshot,
@@ -18,51 +16,6 @@ pub fn Buffer(comptime size: comptime_int) type {
         size: usize,
 
         ref_count: usize,
-
-        pub fn prepareOneshot(
-            self: *@This(),
-            ring: *uring.Ring,
-            fd: i32,
-            len: usize,
-        ) !void {
-            self.t = .oneshot;
-            self.size = len;
-            self.ref_count = 1;
-
-            var sqe = try ring.getSqe();
-            sqe.prep_write(fd, self.data[0..len], 0);
-            sqe.user_data = @bitCast(uring.Userdata{ .op = .write, .d = @intCast(self.idx), .fd = fd });
-        }
-
-        pub fn prepareBroadcast(
-            self: *@This(),
-            ring: *uring.Ring,
-            client_manager: *client.ClientManager,
-            len: usize,
-        ) !void {
-            self.t = .broadcast;
-            self.size = len;
-            self.ref_count = 0;
-
-            for (client_manager.lookup.items) |slot| {
-                if (slot.client) |c| {
-                    var sqe = ring.getSqe() catch {
-                        try ring.insertTask(.{ .buffer = self, .d = .{
-                            .broadcast = .{
-                                .cursor = self.ref_count,
-                                .max_gen = client_manager.global_generation,
-                            },
-                        } });
-                        break;
-                    };
-                    sqe.prep_write(c.fd, self.data[0..len], 0);
-                    sqe.user_data = @bitCast(uring.Userdata{ .op = .write, .d = @intCast(self.idx), .fd = c.fd });
-                    self.ref_count += 1;
-                }
-            }
-
-            if (self.ref_count == 0) return BufferError.ZeroBroadcast;
-        }
     };
 }
 

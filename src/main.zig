@@ -102,7 +102,7 @@ fn processPacket(
                 b.data[1] = 0x01;
                 @memcpy(b.data[2..10], @as([]const u8, @ptrCast(&p.status_ping.payload)));
 
-                try b.prepareOneshot(ctx.ring, client.fd, 10);
+                try ctx.ring.prepareOneshot(client.fd, b, 10);
             }
         },
         .login_start => {
@@ -144,7 +144,7 @@ fn processPacket(
                 .flags = 0,
             }, b.data[offset..]) orelse return PacketProcessingError.EncodingFailure;
 
-            try b.prepareOneshot(ctx.ring, client.fd, offset);
+            try ctx.ring.prepareOneshot(client.fd, b, offset);
             client.state = .play;
 
             dispatch(ctx, "onJoin", .{client});
@@ -231,7 +231,7 @@ fn keepaliveTask(ctx: *common.Context, _: u64) void {
         &b.data,
     ).?;
 
-    b.prepareBroadcast(ctx.ring, ctx.client_manager, size) catch {
+    ctx.ring.prepareBroadcast(ctx, b, size) catch {
         ctx.buffer_pool.releaseBuf(b.idx);
         return;
     };
