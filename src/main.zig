@@ -13,6 +13,7 @@ pub const Modules = .{
         .send_join_message = true,
         .send_quit_message = true,
     }),
+    @import("module/log.zig").LogModule(.{}),
     @import("module/pachelbel.zig").PachelbelModule,
 };
 
