@@ -477,6 +477,56 @@ pub const ClientPlayEntityRelativeMove = struct {
     }
 };
 
+pub const ClientPlayChunkData = struct {
+    x: i32,
+    z: i32,
+    continuous: bool,
+    bit_mask: u16,
+    chunk: *const common.chunk.Chunk,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        var offset: usize = 5;
+        offset += types.VarInt.encode(0x21, buf[offset..]) catch return EncodingError.OutOfBounds;
+
+        offset += try encodeValue(i32, self.x, buf[offset..]);
+        offset += try encodeValue(i32, self.z, buf[offset..]);
+        offset += try encodeValue(bool, self.continuous, buf[offset..]);
+        offset += try encodeValue(u16, self.bit_mask, buf[offset..]);
+
+        var section_count: usize = 0;
+        for (0..8) |i| {
+            if ((self.bit_mask & (@as(u8, 2) << @intCast(i))) != 0) {
+                section_count += 1;
+            }
+        }
+
+        offset += types.VarInt.encode(@intCast(10240 * section_count), buf[offset..]) catch return EncodingError.OutOfBounds;
+
+        for (0..8) |i| {
+            if ((self.bit_mask & (@as(u8, 2) << @intCast(i))) == 0) {
+                continue;
+            }
+
+            for (0..4096) |j| {
+                offset += try encodeValue(u16, self.chunk.sections[i].blocks[j], buf[offset..]);
+            }
+
+            for (0..2048) |j| {
+                offset += try encodeValue(
+                    u8,
+                    (@as(u8, @intCast(self.chunk.sections[i].block_light[j * 2])) << 4) | self.chunk.sections[i].block_light[j * 2 + 1],
+                    buf[offset..],
+                );
+            }
+        }
+
+        const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;
+        @memmove(buf[size .. size + offset], buf[5 .. 5 + offset]);
+
+        return size + offset - 5;
+    }
+};
+
 /// Used to play a sound effect on the client.
 /// Custom sounds may be added by resource packs.
 pub const ClientPlaySoundEffect = struct {

@@ -4,6 +4,7 @@ const Modules = @import("root").Modules;
 
 pub const buffer = @import("buffer.zig");
 pub const chat = @import("chat.zig");
+pub const chunk = @import("chunk.zig");
 pub const client = @import("client.zig");
 pub const scheduler = @import("scheduler.zig");
 pub const uring = @import("uring.zig");
