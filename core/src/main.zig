@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const common = @import("common/mod.zig");
-const packet = @import("packet/mod.zig");
+const common = @import("graphite-common");
+const protocol = @import("graphite-protocol");
 
 const PORT = 25565;
 const ADDRESS = "127.0.0.1";
@@ -14,7 +14,6 @@ pub const Modules = .{
         .send_quit_message = true,
     }),
     @import("module/log.zig").LogModule(.{}),
-    @import("module/pachelbel.zig").PachelbelModule,
 };
 
 fn dispatch(
@@ -87,7 +86,7 @@ const PacketProcessingError = error{
 fn processPacket(
     ctx: *common.Context,
     client: *common.client.Client,
-    p: packet.ServerBoundPacket,
+    p: protocol.ServerBoundPacket,
 ) !void {
     switch (p) {
         .handshake => client.state = @enumFromInt(p.handshake.next_state),
@@ -121,14 +120,14 @@ fn processPacket(
 
             var offset: usize = 0;
 
-            offset += try packet.ClientLoginSuccess.encode(&.{
+            offset += try protocol.ClientLoginSuccess.encode(&.{
                 .uuid = &uuid_buf,
                 .username = client.username.items,
             }, b.data[offset..]);
 
-            offset += try packet.ClientPlayJoinGame.encode(&.{
+            offset += try protocol.ClientPlayJoinGame.encode(&.{
                 .entity_id = 0,
-                .gamemode = packet.Gamemode(.survival, false),
+                .gamemode = protocol.Gamemode(.survival, false),
                 .dimension = .overworld,
                 .difficulty = .normal,
                 .max_players = 20,
@@ -136,7 +135,7 @@ fn processPacket(
                 .reduced_debug_info = false,
             }, b.data[offset..]);
 
-            offset += try packet.ClientPlayPlayerPositionAndLook.encode(&.{
+            offset += try protocol.ClientPlayPlayerPositionAndLook.encode(&.{
                 .x = 0.0,
                 .y = 67.0,
                 .z = 0.0,
@@ -162,7 +161,7 @@ fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
     while (true) {
         var offset = global_offset;
 
-        const len = packet.types.VarInt.decode(client.read_buf[offset..client.read_buf_tail]) catch break;
+        const len = protocol.types.VarInt.decode(client.read_buf[offset..client.read_buf_tail]) catch break;
         offset += len.len;
 
         if (client.read_buf_tail - offset < len.value) {
@@ -171,10 +170,10 @@ fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
 
         const packet_end = offset + @as(usize, @intCast(len.value));
 
-        const id = packet.types.VarInt.decode(client.read_buf[offset..packet_end]) catch break;
+        const id = protocol.types.VarInt.decode(client.read_buf[offset..packet_end]) catch break;
         offset += id.len;
 
-        const p = packet.ServerBoundPacket.decode(client.state, id.value, client.read_buf[offset..packet_end]) catch {
+        const p = protocol.ServerBoundPacket.decode(client.state, id.value, client.read_buf[offset..packet_end]) catch {
             global_offset = packet_end;
             continue;
         };
@@ -230,8 +229,8 @@ fn keepaliveTask(ctx: *common.Context, _: u64) void {
 
     const b = ctx.buffer_pool.allocBuf() catch return;
 
-    const size = packet.ClientPlayKeepAlive.encode(
-        &.{ .id = packet.types.VarInt{ .value = 67 } },
+    const size = protocol.ClientPlayKeepAlive.encode(
+        &.{ .id = protocol.types.VarInt{ .value = 67 } },
         &b.data,
     ) catch return;
 

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const Uuid = @import("mod.zig").Uuid;
+const Uuid = @import("root.zig").Uuid;
 
 pub const ClientState = enum(u8) {
     handshake = 0,

@@ -1,8 +1,7 @@
 const std = @import("std");
 
-const Buffer = @import("buffer.zig").Buffer(4096);
-const client = @import("client.zig");
-const Context = @import("mod.zig").Context;
+const root = @import("root.zig");
+const Buffer = root.buffer.Buffer(4096);
 
 pub const UserdataOp = enum(u4) {
     accept,
@@ -45,7 +44,7 @@ pub const RingTask = union(enum) {
     pub fn pump(
         self: *RingTask,
         ring: *Ring,
-        clients: []client.ClientSlot,
+        clients: []root.client.ClientSlot,
     ) !bool {
         switch (self.*) {
             .accept => |*a| {
@@ -317,7 +316,7 @@ pub const Ring = struct {
 
     pub fn prepareBroadcast(
         self: *Ring,
-        ctx: *Context,
+        ctx: *root.Context,
         b: *Buffer,
         size: usize,
     ) !void {
@@ -344,7 +343,7 @@ pub const Ring = struct {
         if (b.ref_count == 0) return RingError.ZeroBroadcast;
     }
 
-    pub fn pump(self: *Ring, ctx: *Context) !void {
+    pub fn pump(self: *Ring, ctx: *root.Context) !void {
         while (self.tasks.first) |node| {
             const task_node: *RingTaskNode = @fieldParentPtr("node", node);
             const finished = try task_node.data.pump(self, ctx.client_manager.lookup.items);

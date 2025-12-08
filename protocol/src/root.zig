@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-pub const common = @import("../common/mod.zig");
+pub const common = @import("graphite-common");
 
 pub const types = @import("types/mod.zig");
 

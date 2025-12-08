@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const Context = @import("mod.zig").Context;
+const Context = @import("root.zig").Context;
 
 const WHEEL_COUNT = 4;
 const SLOTS_PER_WHEEL = 256;

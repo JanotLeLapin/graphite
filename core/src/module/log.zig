@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const common = @import("../common/mod.zig");
+const common = @import("graphite-common");
 
 pub fn formatAddr(buf: []u8, addr: *const std.posix.sockaddr) ![]u8 {
     if (addr.family != std.posix.AF.INET) {

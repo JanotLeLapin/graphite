@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const common = @import("../common/mod.zig");
-const packet = @import("../packet/mod.zig");
+const common = @import("graphite-common");
+const protocol = @import("graphite-protocol");
 
 pub const VanillaStatusOptions = struct {
     version_name: []const u8,
@@ -26,7 +26,7 @@ fn broadcastMessage(
     errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
     var json: [buf_len]u8 = undefined;
-    const size = try packet.ClientPlayChatMessage.encode(
+    const size = try protocol.ClientPlayChatMessage.encode(
         &.{
             .json = try std.fmt.bufPrint(
                 json[0..],
@@ -62,7 +62,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
                 errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
                 var json: [512]u8 = undefined;
-                const size = try packet.ClientStatusResponse.encode(
+                const size = try protocol.ClientStatusResponse.encode(
                     &.{
                         .response = try std.fmt.bufPrint(json[0..], "{{\"version\":{{\"name\":\"" ++ status.version_name ++ "\",\"protocol\":47}},\"players\":{{\"max\":20,\"online\":{d},\"sample\":[]}},\"description\":{f}}}", .{
                             0,
