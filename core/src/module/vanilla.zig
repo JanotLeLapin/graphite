@@ -22,8 +22,8 @@ fn broadcastMessage(
     ctx: *common.Context,
     message: common.chat.Chat,
 ) !void {
-    const b = try ctx.buffer_pool.allocBuf();
-    errdefer ctx.buffer_pool.releaseBuf(b.idx);
+    const b = try ctx.buffer_pools.allocBuf(.@"10");
+    errdefer ctx.buffer_pools.releaseBuf(b.idx);
 
     var json: [buf_len]u8 = undefined;
     const size = try protocol.ClientPlayChatMessage.encode(
@@ -57,9 +57,9 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
         ) !void {
             const status = opt.status orelse return;
 
-            const b = try ctx.buffer_pool.allocBuf();
+            const b = try ctx.buffer_pools.allocBuf(.@"10");
             {
-                errdefer ctx.buffer_pool.releaseBuf(b.idx);
+                errdefer ctx.buffer_pools.releaseBuf(b.idx);
 
                 var json: [512]u8 = undefined;
                 const size = try protocol.ClientStatusResponse.encode(

@@ -72,7 +72,7 @@ pub fn pitchFromMidi(midi: u8) u8 {
 pub const Context = struct {
     client_manager: *client.ClientManager,
     ring: *uring.Ring,
-    buffer_pool: *buffer.BufferPool(4096),
+    buffer_pools: *buffer.BufferPools,
     scheduler: *scheduler.Scheduler,
     module_registry: ModuleRegistry,
 };

@@ -68,7 +68,7 @@ pub const RingTask = union(enum) {
             .oneshot => |*o| {
                 var sqe = ring.getSqe() catch return false;
                 sqe.prep_write(o.cfd, o.buffer.ptr[0..o.buffer.size], 0);
-                sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(o.buffer.idx), .fd = o.cfd });
+                sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @bitCast(o.buffer.idx), .fd = o.cfd });
                 return true;
             },
             .broadcast => |*b| {
@@ -82,7 +82,7 @@ pub const RingTask = union(enum) {
                     if (slot.client) |c| {
                         var sqe = ring.getSqe() catch return false;
                         sqe.prep_write(c.fd, b.buffer.ptr[0..b.buffer.size], 0);
-                        sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.buffer.idx), .fd = c.fd });
+                        sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @bitCast(b.buffer.idx), .fd = c.fd });
                         b.buffer.ref_count += 1;
                     }
                 }
@@ -311,7 +311,7 @@ pub const Ring = struct {
             return;
         };
         sqe.prep_write(fd, b.ptr[0..size], 0);
-        sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.idx), .fd = fd });
+        sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @bitCast(b.idx), .fd = fd });
     }
 
     pub fn prepareBroadcast(
@@ -336,7 +336,7 @@ pub const Ring = struct {
                     return;
                 };
                 sqe.prep_write(c.fd, b.ptr[0..size], 0);
-                sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.idx), .fd = c.fd });
+                sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @bitCast(b.idx), .fd = c.fd });
                 b.ref_count += 1;
             }
         }

@@ -94,9 +94,9 @@ fn processPacket(
             dispatch(ctx, "onStatus", .{client});
         },
         .status_ping => {
-            const b = try ctx.buffer_pool.allocBuf();
+            const b = try ctx.buffer_pools.allocBuf(.@"6");
             {
-                errdefer ctx.buffer_pool.releaseBuf(b.idx);
+                errdefer ctx.buffer_pools.releaseBuf(b.idx);
 
                 b.ptr[0] = 9;
                 b.ptr[1] = 0x01;
@@ -115,8 +115,8 @@ fn processPacket(
 
             std.log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
 
-            const b = try ctx.buffer_pool.allocBuf();
-            errdefer ctx.buffer_pool.releaseBuf(b.idx);
+            const b = try ctx.buffer_pools.allocBuf(.@"10");
+            errdefer ctx.buffer_pools.releaseBuf(b.idx);
 
             var offset: usize = 0;
 
@@ -227,7 +227,7 @@ fn createServer() !i32 {
 fn keepaliveTask(ctx: *common.Context, _: u64) void {
     ctx.scheduler.schedule(&keepaliveTask, 200, 0) catch {};
 
-    const b = ctx.buffer_pool.allocBuf() catch return;
+    const b = ctx.buffer_pools.allocBuf(.@"6") catch return;
 
     const size = protocol.ClientPlayKeepAlive.encode(
         &.{ .id = protocol.types.VarInt{ .value = 67 } },
@@ -235,7 +235,7 @@ fn keepaliveTask(ctx: *common.Context, _: u64) void {
     ) catch return;
 
     ctx.ring.prepareBroadcast(ctx, b, size) catch {
-        ctx.buffer_pool.releaseBuf(b.idx);
+        ctx.buffer_pools.releaseBuf(b.idx);
         return;
     };
 }
@@ -265,8 +265,8 @@ pub fn main() !void {
     var ring = try common.uring.Ring.init(gpa.allocator(), URING_QUEUE_ENTRIES);
     defer ring.deinit();
 
-    var buffer_pool = try common.buffer.BufferPool(4096).init(gpa.allocator(), 64);
-    defer buffer_pool.deinit();
+    var buffer_pools = try common.buffer.BufferPools.init(gpa.allocator());
+    defer buffer_pools.deinit();
 
     var scheduler = common.scheduler.Scheduler.init(gpa.allocator());
     defer scheduler.deinit();
@@ -279,7 +279,7 @@ pub fn main() !void {
     var ctx = common.Context{
         .client_manager = &client_manager,
         .ring = &ring,
-        .buffer_pool = &buffer_pool,
+        .buffer_pools = &buffer_pools,
         .scheduler = &scheduler,
         .module_registry = module_registry,
     };
@@ -371,10 +371,11 @@ pub fn main() !void {
                         std.log.err("cqe error: write: {s}", .{@tagName(err)});
                         client_manager.remove(cfd);
                     } else {
-                        const b = ctx.buffer_pool.buffers[@intCast(ud.d)];
-                        b.header.ref_count -= 1;
-                        if (0 == b.header.ref_count) {
-                            ctx.buffer_pool.releaseBuf(@intCast(ud.d));
+                        const idx: common.buffer.BufferIndex = @bitCast(ud.d);
+                        const b = ctx.buffer_pools.get(idx);
+                        b.ref_count -= 1;
+                        if (0 == b.ref_count) {
+                            ctx.buffer_pools.releaseBuf(idx);
                         }
                     }
                 },
@@ -386,5 +387,5 @@ pub fn main() !void {
         _ = try ring.submit();
     }
 
-    std.log.debug("busy buffers on exit: {d}", .{buffer_pool.busy_count});
+    // std.log.debug("busy buffers on exit: {d}", .{buffer_pool.busy_count});
 }
