@@ -98,9 +98,9 @@ fn processPacket(
             {
                 errdefer ctx.buffer_pool.releaseBuf(b.idx);
 
-                b.data[0] = 9;
-                b.data[1] = 0x01;
-                @memcpy(b.data[2..10], @as([]const u8, @ptrCast(&p.status_ping.payload)));
+                b.ptr[0] = 9;
+                b.ptr[1] = 0x01;
+                @memcpy(b.ptr[2..10], @as([]const u8, @ptrCast(&p.status_ping.payload)));
 
                 try ctx.ring.prepareOneshot(client.fd, b, 10);
             }
@@ -123,7 +123,7 @@ fn processPacket(
             offset += try protocol.ClientLoginSuccess.encode(&.{
                 .uuid = &uuid_buf,
                 .username = client.username.items,
-            }, b.data[offset..]);
+            }, b.ptr[offset..]);
 
             offset += try protocol.ClientPlayJoinGame.encode(&.{
                 .entity_id = 0,
@@ -133,7 +133,7 @@ fn processPacket(
                 .max_players = 20,
                 .level_type = "default",
                 .reduced_debug_info = false,
-            }, b.data[offset..]);
+            }, b.ptr[offset..]);
 
             offset += try protocol.ClientPlayPlayerPositionAndLook.encode(&.{
                 .x = 0.0,
@@ -142,7 +142,7 @@ fn processPacket(
                 .yaw = 0.0,
                 .pitch = 0.0,
                 .flags = 0,
-            }, b.data[offset..]);
+            }, b.ptr[offset..]);
 
             try ctx.ring.prepareOneshot(client.fd, b, offset);
             client.state = .play;
@@ -231,7 +231,7 @@ fn keepaliveTask(ctx: *common.Context, _: u64) void {
 
     const size = protocol.ClientPlayKeepAlive.encode(
         &.{ .id = protocol.types.VarInt{ .value = 67 } },
-        &b.data,
+        b.ptr,
     ) catch return;
 
     ctx.ring.prepareBroadcast(ctx, b, size) catch {
@@ -372,8 +372,8 @@ pub fn main() !void {
                         client_manager.remove(cfd);
                     } else {
                         const b = ctx.buffer_pool.buffers[@intCast(ud.d)];
-                        b.ref_count -= 1;
-                        if (0 == b.ref_count) {
+                        b.header.ref_count -= 1;
+                        if (0 == b.header.ref_count) {
                             ctx.buffer_pool.releaseBuf(@intCast(ud.d));
                         }
                     }

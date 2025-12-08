@@ -8,19 +8,23 @@ pub const BufferType = union(enum) {
     oneshot,
 };
 
-pub fn Buffer(comptime size: comptime_int) type {
-    return struct {
-        t: BufferType,
-        idx: usize,
-        data: [size]u8,
-        size: usize,
+pub const Buffer = struct {
+    t: BufferType,
+    idx: usize,
+    size: usize,
+    ref_count: usize,
+    ptr: []u8,
+};
 
-        ref_count: usize,
+pub fn BufferStorage(comptime size: comptime_int) type {
+    return struct {
+        header: Buffer,
+        data: [size]u8,
     };
 }
 
 pub fn BufferPool(comptime buf_size: comptime_int) type {
-    const B = Buffer(buf_size);
+    const B = BufferStorage(buf_size);
 
     return struct {
         idx_stack: []usize,
@@ -39,7 +43,8 @@ pub fn BufferPool(comptime buf_size: comptime_int) type {
             for (res.idx_stack, res.buffers, 0..) |*idx, *b, i| {
                 idx.* = i;
                 b.* = try alloc.create(B);
-                b.*.idx = i;
+                b.*.header.idx = i;
+                b.*.header.ptr = b.*.data[0..buf_size];
             }
 
             return res;
@@ -57,18 +62,19 @@ pub fn BufferPool(comptime buf_size: comptime_int) type {
             ) |*idx, *b, i| {
                 idx.* = i;
                 b.* = try self.alloc.create(B);
-                b.*.idx = i;
+                b.*.header.idx = i;
+                b.*.header.ptr = b.*.data[0..buf_size];
             }
         }
 
-        pub fn allocBuf(self: *@This()) !*B {
+        pub fn allocBuf(self: *@This()) !*Buffer {
             if (self.busy_count >= self.buffers.len) {
                 try self.resize(self.buffers.len * 2);
             }
 
             const idx = self.idx_stack[self.busy_count];
             self.busy_count += 1;
-            return self.buffers[idx];
+            return &self.buffers[idx].header;
         }
 
         pub fn releaseBuf(self: *@This(), idx: usize) void {

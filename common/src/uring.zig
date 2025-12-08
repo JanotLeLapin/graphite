@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const root = @import("root.zig");
-const Buffer = root.buffer.Buffer(4096);
+const Buffer = root.buffer.Buffer;
 
 pub const UserdataOp = enum(u4) {
     accept,
@@ -67,7 +67,7 @@ pub const RingTask = union(enum) {
             },
             .oneshot => |*o| {
                 var sqe = ring.getSqe() catch return false;
-                sqe.prep_write(o.cfd, o.buffer.data[0..o.buffer.size], 0);
+                sqe.prep_write(o.cfd, o.buffer.ptr[0..o.buffer.size], 0);
                 sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(o.buffer.idx), .fd = o.cfd });
                 return true;
             },
@@ -81,7 +81,7 @@ pub const RingTask = union(enum) {
 
                     if (slot.client) |c| {
                         var sqe = ring.getSqe() catch return false;
-                        sqe.prep_write(c.fd, b.buffer.data[0..b.buffer.size], 0);
+                        sqe.prep_write(c.fd, b.buffer.ptr[0..b.buffer.size], 0);
                         sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.buffer.idx), .fd = c.fd });
                         b.buffer.ref_count += 1;
                     }
@@ -310,7 +310,7 @@ pub const Ring = struct {
             } });
             return;
         };
-        sqe.prep_write(fd, b.data[0..size], 0);
+        sqe.prep_write(fd, b.ptr[0..size], 0);
         sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.idx), .fd = fd });
     }
 
@@ -335,7 +335,7 @@ pub const Ring = struct {
                     } });
                     return;
                 };
-                sqe.prep_write(c.fd, b.data[0..size], 0);
+                sqe.prep_write(c.fd, b.ptr[0..size], 0);
                 sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @intCast(b.idx), .fd = c.fd });
                 b.ref_count += 1;
             }

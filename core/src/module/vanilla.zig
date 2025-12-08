@@ -35,7 +35,7 @@ fn broadcastMessage(
             ),
             .position = .chat,
         },
-        &b.data,
+        b.ptr,
     );
     try ctx.ring.prepareBroadcast(ctx, b, size);
 }
@@ -69,7 +69,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
                             status.description,
                         }),
                     },
-                    b.data[0..],
+                    b.ptr,
                 );
 
                 try ctx.ring.prepareOneshot(client.fd, b, size);
