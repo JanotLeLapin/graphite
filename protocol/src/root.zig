@@ -500,7 +500,7 @@ pub const ClientPlayChunkData = struct {
             }
         }
 
-        offset += types.VarInt.encode(@intCast(10240 * section_count), buf[offset..]) catch return EncodingError.OutOfBounds;
+        offset += types.VarInt.encode(@intCast(12288 * section_count + 256), buf[offset..]) catch return EncodingError.OutOfBounds;
 
         for (0..8) |i| {
             if ((self.bit_mask & (@as(u8, 2) << @intCast(i))) == 0) {
@@ -518,6 +518,18 @@ pub const ClientPlayChunkData = struct {
                     buf[offset..],
                 );
             }
+
+            for (0..2048) |j| {
+                offset += try encodeValue(
+                    u8,
+                    (@as(u8, @intCast(self.chunk.sections[i].sky_light[j * 2])) << 4) | self.chunk.sections[i].sky_light[j * 2 + 1],
+                    buf[offset..],
+                );
+            }
+        }
+
+        for (0..256) |i| {
+            offset += try encodeValue(u8, @intFromEnum(self.chunk.biomes[i]), buf[offset..]);
         }
 
         const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;

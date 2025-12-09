@@ -5,6 +5,12 @@ pub const BlockType = enum(u8) {
     dirt = 3,
 };
 
+pub const BiomeType = enum(u8) {
+    the_void = 0,
+    plains = 1,
+    desert = 2,
+};
+
 pub fn BlockData(comptime t: BlockType, comptime m: u4) u16 {
     const tn: u16 = @intFromEnum(t);
     return (((tn << 4) | (m & 0x0F)) << 8) | (tn >> 4);
@@ -18,4 +24,5 @@ pub const ChunkSection = struct {
 
 pub const Chunk = struct {
     sections: [16]ChunkSection,
+    biomes: [256]BiomeType,
 };
