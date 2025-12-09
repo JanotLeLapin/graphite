@@ -244,6 +244,11 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
+    var entities = try common.zcs.Entities.init(.{
+        .gpa = gpa.allocator(),
+    });
+    defer entities.deinit(gpa.allocator());
+
     var client_manager = try common.client.ClientManager.init(8, gpa.allocator(), gpa.allocator());
     defer client_manager.deinit();
 
@@ -277,6 +282,7 @@ pub fn main() !void {
     defer module_registry.deinit();
 
     var ctx = common.Context{
+        .entities = &entities,
         .client_manager = &client_manager,
         .ring = &ring,
         .buffer_pools = &buffer_pools,

@@ -21,10 +21,16 @@ pub fn build(b: *std.Build) void {
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
 
+    const zcs_dep = b.dependency("zcs", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const common_mod = b.addModule("graphite-common", .{
         .root_source_file = b.path("common/src/root.zig"),
         .target = target,
     });
+    common_mod.addImport("zcs", zcs_dep.module("zcs"));
 
     const protocol_mod = b.addModule("graphite-protocol", .{
         .root_source_file = b.path("protocol/src/root.zig"),

@@ -2,6 +2,8 @@ const std = @import("std");
 
 const Modules = @import("root").Modules;
 
+pub const zcs = @import("zcs");
+
 pub const buffer = @import("buffer.zig");
 pub const chat = @import("chat.zig");
 pub const chunk = @import("chunk.zig");
@@ -71,6 +73,7 @@ pub fn pitchFromMidi(midi: u8) u8 {
 }
 
 pub const Context = struct {
+    entities: *zcs.Entities,
     client_manager: *client.ClientManager,
     ring: *uring.Ring,
     buffer_pools: *buffer.BufferPools,
