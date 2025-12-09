@@ -169,6 +169,8 @@ fn processPacket(
             l.y = pd.y;
             l.z = pd.z;
             l.on_ground = pd.on_ground;
+
+            dispatch(ctx, "onMove", .{client});
         },
         .play_player_position_and_look => |pd| {
             const l = client.e.get(ctx.entities, common.ecs.Location).?;
@@ -176,6 +178,8 @@ fn processPacket(
             l.y = pd.y;
             l.z = pd.z;
             l.on_ground = pd.on_ground;
+
+            dispatch(ctx, "onMove", .{client});
         },
         else => {},
     }
