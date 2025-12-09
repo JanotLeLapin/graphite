@@ -239,7 +239,7 @@ pub const ServerPlayChatMessage = struct {
 };
 
 pub const ServerPlayPlayer = struct {
-    on_ground: u8,
+    on_ground: bool,
 
     pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
@@ -250,7 +250,7 @@ pub const ServerPlayPlayerPosition = struct {
     x: f64,
     y: f64,
     z: f64,
-    on_ground: u8,
+    on_ground: bool,
 
     pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
@@ -260,7 +260,7 @@ pub const ServerPlayPlayerPosition = struct {
 pub const ServerPlayPlayerLook = struct {
     yaw: f32,
     pitch: f32,
-    on_ground: u8,
+    on_ground: bool,
 
     pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);
@@ -273,7 +273,7 @@ pub const ServerPlayPlayerPositionAndLook = struct {
     z: f64,
     yaw: f32,
     pitch: f32,
-    on_ground: u8,
+    on_ground: bool,
 
     pub fn decode(buf: []const u8) !@This() {
         return genDecodeBasic(@This())(buf);

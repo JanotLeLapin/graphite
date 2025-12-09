@@ -154,7 +154,7 @@ fn processPacket(
             });
             defer cb.deinit(ctx.zcs_alloc, ctx.entities);
 
-            _ = client.e.add(&cb, common.ecs.Location, .{ .x = 0.0, .y = 67.0, .z = 0.0 });
+            _ = client.e.add(&cb, common.ecs.Location, .{ .x = 0.0, .y = 67.0, .z = 0.0, .on_ground = false });
 
             common.zcs.CmdBuf.Exec.immediate(ctx.entities, &cb);
 
@@ -168,12 +168,14 @@ fn processPacket(
             l.x = pd.x;
             l.y = pd.y;
             l.z = pd.z;
+            l.on_ground = pd.on_ground;
         },
         .play_player_position_and_look => |pd| {
             const l = client.e.get(ctx.entities, common.ecs.Location).?;
             l.x = pd.x;
             l.y = pd.y;
             l.z = pd.z;
+            l.on_ground = pd.on_ground;
         },
         else => {},
     }
