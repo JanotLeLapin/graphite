@@ -280,6 +280,16 @@ pub const ServerPlayPlayerPositionAndLook = struct {
     }
 };
 
+pub const ServerPlayPlayerDigging = struct {
+    status: u8,
+    location: types.Location,
+    face: u8,
+
+    pub fn decode(buf: []const u8) !@This() {
+        return genDecodeBasic(@This())(buf);
+    }
+};
+
 pub const ServerBoundPacketError = error{
     BadPacketId,
 };
@@ -294,6 +304,7 @@ pub const ServerBoundPacket = union(enum) {
     play_player_position: ServerPlayPlayerPosition,
     play_player_look: ServerPlayPlayerLook,
     play_player_position_and_look: ServerPlayPlayerPositionAndLook,
+    play_player_digging: ServerPlayPlayerDigging,
 
     pub fn decode(
         state: common.client.ClientState,
@@ -317,6 +328,7 @@ pub const ServerBoundPacket = union(enum) {
                 0x04 => .{ .play_player_position = try ServerPlayPlayerPosition.decode(buf) },
                 0x05 => .{ .play_player_look = try ServerPlayPlayerLook.decode(buf) },
                 0x06 => .{ .play_player_position_and_look = try ServerPlayPlayerPositionAndLook.decode(buf) },
+                0x07 => .{ .play_player_digging = try ServerPlayPlayerDigging.decode(buf) },
                 else => return ServerBoundPacketError.BadPacketId,
             },
         };

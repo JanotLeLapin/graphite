@@ -1,3 +1,9 @@
+pub const Location = struct {
+    x: i32,
+    y: u8,
+    z: i32,
+};
+
 pub const BlockType = enum(u8) {
     air = 0,
     stone = 1,
