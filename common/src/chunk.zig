@@ -19,7 +19,7 @@ pub const BiomeType = enum(u8) {
 
 pub fn BlockData(t: BlockType, m: u4) u16 {
     const tn: u16 = @intFromEnum(t);
-    return (((tn << 4) | (m & 0x0F)) << 8) | (tn >> 4);
+    return (tn << 4) | (m & 0x0F);
 }
 
 pub const ChunkSection = struct {

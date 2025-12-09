@@ -21,4 +21,13 @@ pub const Location = struct {
             .len = 8,
         };
     }
+
+    pub fn encode(value: common.chunk.Location, buf: []u8) !usize {
+        const x: u64 = @intCast(value.x);
+        const y: u64 = @intCast(value.y);
+        const z: u64 = @intCast(value.z);
+        const p = ((x & 0x3FFFFFF) << 38) | ((y & 0xFFF) << 26) | (z & 0x3FFFFFF);
+        std.mem.writeInt(u64, buf[0..8], p, .big);
+        return 8;
+    }
 };

@@ -122,7 +122,7 @@ pub fn encodeChunkData(bit_mask: u16, sky_light: bool, chunk: *const common.chun
         }
 
         for (0..4096) |j| {
-            offset += try encodeValue(u16, chunk.sections[i].blocks[j], buf[offset..]);
+            offset += try encodeValue(u16, @byteSwap(chunk.sections[i].blocks[j]), buf[offset..]);
         }
 
         for (0..2048) |j| {
@@ -564,6 +564,15 @@ pub const ClientPlayChunkData = struct {
         @memmove(buf[size .. size + offset], buf[5 .. 5 + offset]);
 
         return size + offset - 5;
+    }
+};
+
+pub const ClientPlayBlockChange = struct {
+    location: types.Location,
+    block_id: types.VarInt,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x23)(self, buf);
     }
 };
 
