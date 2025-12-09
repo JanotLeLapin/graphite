@@ -147,10 +147,33 @@ fn processPacket(
             try ctx.ring.prepareOneshot(client.fd, b, offset);
             client.state = .play;
 
+            var cb = try common.zcs.CmdBuf.init(.{
+                .name = null,
+                .gpa = ctx.zcs_alloc,
+                .es = ctx.entities,
+            });
+            defer cb.deinit(ctx.zcs_alloc, ctx.entities);
+
+            _ = client.e.add(&cb, common.ecs.Location, .{ .x = 0.0, .y = 67.0, .z = 0.0 });
+
+            common.zcs.CmdBuf.Exec.immediate(ctx.entities, &cb);
+
             dispatch(ctx, "onJoin", .{client});
         },
         .play_chat_message => |pd| {
             dispatch(ctx, "onChatMessage", .{ client, pd.message });
+        },
+        .play_player_position => |pd| {
+            const l = client.e.get(ctx.entities, common.ecs.Location).?;
+            l.x = pd.x;
+            l.y = pd.y;
+            l.z = pd.z;
+        },
+        .play_player_position_and_look => |pd| {
+            const l = client.e.get(ctx.entities, common.ecs.Location).?;
+            l.x = pd.x;
+            l.y = pd.y;
+            l.z = pd.z;
         },
         else => {},
     }
@@ -244,10 +267,11 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
+    const zcs_alloc = gpa.allocator();
     var entities = try common.zcs.Entities.init(.{
-        .gpa = gpa.allocator(),
+        .gpa = zcs_alloc,
     });
-    defer entities.deinit(gpa.allocator());
+    defer entities.deinit(zcs_alloc);
 
     var client_manager = try common.client.ClientManager.init(8, gpa.allocator(), gpa.allocator());
     defer client_manager.deinit();
@@ -283,6 +307,7 @@ pub fn main() !void {
 
     var ctx = common.Context{
         .entities = &entities,
+        .zcs_alloc = zcs_alloc,
         .client_manager = &client_manager,
         .ring = &ring,
         .buffer_pools = &buffer_pools,
@@ -326,7 +351,15 @@ pub fn main() !void {
                         const cfd = cqe.res;
                         std.log.debug("client: {d} connected", .{cfd});
 
-                        var client = try client_manager.add(cfd);
+                        var cb = try common.zcs.CmdBuf.init(.{ .name = null, .gpa = zcs_alloc, .es = &entities });
+                        defer cb.deinit(zcs_alloc, &entities);
+
+                        const e = common.zcs.Entity.reserve(&cb);
+                        _ = e.add(&cb, common.ecs.Client, .{ .fd = cfd });
+
+                        common.zcs.CmdBuf.Exec.immediate(&entities, &cb);
+
+                        var client = try client_manager.add(cfd, e);
                         client.state = .handshake;
                         client.addr = addr;
 

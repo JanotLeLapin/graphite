@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const zcs = @import("zcs");
+
 const Uuid = @import("root.zig").Uuid;
 
 pub const ClientState = enum(u8) {
@@ -11,6 +13,7 @@ pub const ClientState = enum(u8) {
 
 pub const Client = struct {
     fd: i32,
+    e: zcs.Entity,
     state: ClientState,
     read_buf: [4096]u8,
     read_buf_tail: usize,
@@ -66,7 +69,7 @@ pub const ClientManager = struct {
         return self.lookup.items[ufd].client;
     }
 
-    pub fn add(self: *ClientManager, fd: i32) !*Client {
+    pub fn add(self: *ClientManager, fd: i32, e: zcs.Entity) !*Client {
         const ufd: usize = @intCast(fd);
         if (ufd >= self.lookup.items.len) {
             try self.lookup.appendNTimes(self.lookup_alloc, .{
@@ -77,6 +80,7 @@ pub const ClientManager = struct {
 
         const client = try self.client_alloc.create(Client);
         client.fd = fd;
+        client.e = e;
         client.read_buf_tail = 0;
         self.lookup.items[ufd] = .{
             .client = client,

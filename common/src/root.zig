@@ -8,6 +8,7 @@ pub const buffer = @import("buffer.zig");
 pub const chat = @import("chat.zig");
 pub const chunk = @import("chunk.zig");
 pub const client = @import("client.zig");
+pub const ecs = @import("ecs.zig");
 pub const scheduler = @import("scheduler.zig");
 pub const uring = @import("uring.zig");
 
@@ -74,6 +75,7 @@ pub fn pitchFromMidi(midi: u8) u8 {
 
 pub const Context = struct {
     entities: *zcs.Entities,
+    zcs_alloc: std.mem.Allocator,
     client_manager: *client.ClientManager,
     ring: *uring.Ring,
     buffer_pools: *buffer.BufferPools,
