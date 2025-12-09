@@ -11,7 +11,7 @@ pub const BiomeType = enum(u8) {
     desert = 2,
 };
 
-pub fn BlockData(comptime t: BlockType, comptime m: u4) u16 {
+pub fn BlockData(t: BlockType, m: u4) u16 {
     const tn: u16 = @intFromEnum(t);
     return (((tn << 4) | (m & 0x0F)) << 8) | (tn >> 4);
 }
