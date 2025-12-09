@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const common = @import("../common/mod.zig");
-const packet = @import("../packet/mod.zig");
+const common = @import("graphite-common");
+const protocol = @import("graphite-protocol");
 
 const ScheduleTaskData = packed struct(u64) {
     client_fd: i32,
@@ -130,8 +130,8 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
 
     _ = ctx.client_manager.get(noteData.client_fd) orelse return;
 
-    const b = ctx.buffer_pool.allocBuf() catch return;
-    const size = packet.ClientPlaySoundEffect.encode(
+    const b = ctx.buffer_pools.allocBuf(.@"10") catch return;
+    const size = protocol.ClientPlaySoundEffect.encode(
         &.{
             .sound_name = noteData.instrument.getName(),
             .x = 0,
@@ -140,11 +140,11 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
             .volume = 10.0,
             .pitch = common.pitchFromMidi(noteData.midi),
         },
-        &b.data,
+        b.ptr,
     ) catch return;
 
     ctx.ring.prepareOneshot(noteData.client_fd, b, size) catch {
-        ctx.buffer_pool.releaseBuf(b.idx);
+        ctx.buffer_pools.releaseBuf(b.idx);
         return;
     };
 }
