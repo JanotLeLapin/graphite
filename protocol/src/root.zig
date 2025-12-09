@@ -113,6 +113,42 @@ pub fn encodeValue(comptime T: anytype, v: T, buf: []u8) !usize {
     }
 }
 
+pub fn encodeChunkData(bit_mask: u16, chunk: *const common.chunk.Chunk, buf: []u8) !usize {
+    var offset: usize = 0;
+
+    for (0..8) |i| {
+        if ((bit_mask & (@as(u8, 2) << @intCast(i))) == 0) {
+            continue;
+        }
+
+        for (0..4096) |j| {
+            offset += try encodeValue(u16, chunk.sections[i].blocks[j], buf[offset..]);
+        }
+
+        for (0..2048) |j| {
+            offset += try encodeValue(
+                u8,
+                (@as(u8, @intCast(chunk.sections[i].block_light[j * 2])) << 4) | chunk.sections[i].block_light[j * 2 + 1],
+                buf[offset..],
+            );
+        }
+
+        for (0..2048) |j| {
+            offset += try encodeValue(
+                u8,
+                (@as(u8, @intCast(chunk.sections[i].sky_light[j * 2])) << 4) | chunk.sections[i].sky_light[j * 2 + 1],
+                buf[offset..],
+            );
+        }
+    }
+
+    for (0..256) |i| {
+        offset += try encodeValue(u8, @intFromEnum(chunk.biomes[i]), buf[offset..]);
+    }
+
+    return offset;
+}
+
 fn genDecodeBasic(comptime T: anytype) fn ([]const u8) EncodingError!T {
     return struct {
         fn decodeFn(buf: []const u8) !T {
@@ -507,36 +543,7 @@ pub const ClientPlayChunkData = struct {
         }
 
         offset += types.VarInt.encode(@intCast(12288 * section_count + 256), buf[offset..]) catch return EncodingError.OutOfBounds;
-
-        for (0..8) |i| {
-            if ((self.bit_mask & (@as(u8, 2) << @intCast(i))) == 0) {
-                continue;
-            }
-
-            for (0..4096) |j| {
-                offset += try encodeValue(u16, self.chunk.sections[i].blocks[j], buf[offset..]);
-            }
-
-            for (0..2048) |j| {
-                offset += try encodeValue(
-                    u8,
-                    (@as(u8, @intCast(self.chunk.sections[i].block_light[j * 2])) << 4) | self.chunk.sections[i].block_light[j * 2 + 1],
-                    buf[offset..],
-                );
-            }
-
-            for (0..2048) |j| {
-                offset += try encodeValue(
-                    u8,
-                    (@as(u8, @intCast(self.chunk.sections[i].sky_light[j * 2])) << 4) | self.chunk.sections[i].sky_light[j * 2 + 1],
-                    buf[offset..],
-                );
-            }
-        }
-
-        for (0..256) |i| {
-            offset += try encodeValue(u8, @intFromEnum(self.chunk.biomes[i]), buf[offset..]);
-        }
+        offset += try encodeChunkData(self.bit_mask, self.chunk, buf[offset..]);
 
         const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;
         @memmove(buf[size .. size + offset], buf[5 .. 5 + offset]);
@@ -564,35 +571,7 @@ pub const ClientPlayMapChunkBulk = struct {
         }
 
         for (self.chunk_meta, self.chunk_data) |*meta, *data| {
-            for (0..8) |i| {
-                if ((meta.bit_mask & (@as(u8, 2) << @intCast(i))) == 0) {
-                    continue;
-                }
-
-                for (0..4096) |j| {
-                    offset += try encodeValue(u16, data.sections[i].blocks[j], buf[offset..]);
-                }
-
-                for (0..2048) |j| {
-                    offset += try encodeValue(
-                        u8,
-                        (@as(u8, @intCast(data.sections[i].block_light[j * 2])) << 4) | data.sections[i].block_light[j * 2 + 1],
-                        buf[offset..],
-                    );
-                }
-
-                for (0..2048) |j| {
-                    offset += try encodeValue(
-                        u8,
-                        (@as(u8, @intCast(data.sections[i].sky_light[j * 2])) << 4) | data.sections[i].sky_light[j * 2 + 1],
-                        buf[offset..],
-                    );
-                }
-            }
-
-            for (0..256) |i| {
-                offset += try encodeValue(u8, @intFromEnum(data.biomes[i]), buf[offset..]);
-            }
+            offset += try encodeChunkData(meta.bit_mask, data, buf[offset..]);
         }
 
         const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;
