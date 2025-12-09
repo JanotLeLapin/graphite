@@ -30,6 +30,12 @@ pub const Difficulty = enum(u8) {
     hard = 3,
 };
 
+pub const ChunkMeta = struct {
+    x: i32,
+    z: i32,
+    bit_mask: u16,
+};
+
 pub const EncodingError = error{
     OutOfBounds,
     SubImplFailed,
@@ -530,6 +536,63 @@ pub const ClientPlayChunkData = struct {
 
         for (0..256) |i| {
             offset += try encodeValue(u8, @intFromEnum(self.chunk.biomes[i]), buf[offset..]);
+        }
+
+        const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;
+        @memmove(buf[size .. size + offset], buf[5 .. 5 + offset]);
+
+        return size + offset - 5;
+    }
+};
+
+pub const ClientPlayMapChunkBulk = struct {
+    sky_light: bool,
+    chunk_meta: []ChunkMeta,
+    chunk_data: []common.chunk.Chunk,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        var offset: usize = 5;
+        offset += types.VarInt.encode(0x26, buf[offset..]) catch return EncodingError.OutOfBounds;
+
+        offset += try encodeValue(bool, self.sky_light, buf[offset..]);
+        offset += types.VarInt.encode(@intCast(self.chunk_meta.len), buf[offset..]) catch return EncodingError.OutOfBounds;
+
+        for (self.chunk_meta) |*meta| {
+            offset += try encodeValue(i32, meta.x, buf[offset..]);
+            offset += try encodeValue(i32, meta.z, buf[offset..]);
+            offset += try encodeValue(u16, meta.bit_mask, buf[offset..]);
+        }
+
+        for (self.chunk_meta, self.chunk_data) |*meta, *data| {
+            for (0..8) |i| {
+                if ((meta.bit_mask & (@as(u8, 2) << @intCast(i))) == 0) {
+                    continue;
+                }
+
+                for (0..4096) |j| {
+                    offset += try encodeValue(u16, data.sections[i].blocks[j], buf[offset..]);
+                }
+
+                for (0..2048) |j| {
+                    offset += try encodeValue(
+                        u8,
+                        (@as(u8, @intCast(data.sections[i].block_light[j * 2])) << 4) | data.sections[i].block_light[j * 2 + 1],
+                        buf[offset..],
+                    );
+                }
+
+                for (0..2048) |j| {
+                    offset += try encodeValue(
+                        u8,
+                        (@as(u8, @intCast(data.sections[i].sky_light[j * 2])) << 4) | data.sections[i].sky_light[j * 2 + 1],
+                        buf[offset..],
+                    );
+                }
+            }
+
+            for (0..256) |i| {
+                offset += try encodeValue(u8, @intFromEnum(data.biomes[i]), buf[offset..]);
+            }
         }
 
         const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;
