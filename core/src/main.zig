@@ -4,7 +4,7 @@ const common = @import("graphite-common");
 const protocol = @import("graphite-protocol");
 
 const PORT = 25565;
-const ADDRESS = "127.0.0.1";
+const ADDRESS = "0.0.0.0";
 
 const URING_QUEUE_ENTRIES = 4096;
 
