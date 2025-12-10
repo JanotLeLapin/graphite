@@ -6,12 +6,15 @@ const SpscQueue = @import("spsc_queue").SpscQueue;
 const common = @import("graphite-common");
 const protocol = @import("graphite-protocol");
 
+const VanillaModule = @import("module/vanilla.zig").VanillaModule(.{
+    .send_join_message = true,
+    .send_quit_message = true,
+});
+const LogModule = @import("module/log.zig").LogModule(.{});
+
 pub const Modules = .{
-    @import("module/vanilla.zig").VanillaModule(.{
-        .send_join_message = true,
-        .send_quit_message = true,
-    }),
-    // @import("module/log.zig").LogModule(.{}),
+    VanillaModule,
+    LogModule,
 };
 
 pub const ModuleRegistry = common.ModuleRegistry(Modules);
@@ -39,7 +42,11 @@ fn dispatch(
 
         if (@hasDecl(ModuleType, method_name)) {
             const method = @field(ModuleType, method_name);
-            const call_args = .{ instance, ctx } ++ args;
+            const call_args = .{
+                instance,
+                ctx,
+                ctx.getModuleRegistry(ModuleRegistry),
+            } ++ args;
             const result = @call(.auto, method, call_args);
 
             const ReturnType = @typeInfo(@TypeOf(result));

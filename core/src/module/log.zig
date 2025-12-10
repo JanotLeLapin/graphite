@@ -51,6 +51,7 @@ pub fn LogModule(comptime opt: LogModuleOptions) type {
         pub fn onJoin(
             _: *@This(),
             _: *common.Context,
+            _: anytype,
             client: *common.client.Client,
         ) !void {
             try info("join", "", opt, client, .{});
@@ -59,6 +60,7 @@ pub fn LogModule(comptime opt: LogModuleOptions) type {
         pub fn onQuit(
             _: *@This(),
             _: *common.Context,
+            _: anytype,
             client: *common.client.Client,
         ) !void {
             try info("quit", "", opt, client, .{});
@@ -67,6 +69,7 @@ pub fn LogModule(comptime opt: LogModuleOptions) type {
         pub fn onChatMessage(
             _: *@This(),
             _: *common.Context,
+            _: anytype,
             client: *common.client.Client,
             msg: []const u8,
         ) !void {
