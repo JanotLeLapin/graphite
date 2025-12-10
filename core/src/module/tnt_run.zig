@@ -8,6 +8,47 @@ const BlockPos = packed struct(u64) {
     z: i32,
 };
 
+const InitialMap: [4]common.chunk.Chunk = blk: {
+    @setEvalBranchQuota(4096);
+    var chunks: [4]common.chunk.Chunk = undefined;
+    for (0..2) |cx| {
+        for (0..2) |cz| {
+            const ci = cx << 1 | cz;
+            for (0..16) |x| {
+                for (0..16) |z| {
+                    const i = z << 4 | x;
+                    const abs_x = x + 16 * cx;
+                    const abs_z = z + 16 * cz;
+
+                    const meta = if ((abs_x + abs_z) % 2 == 0) 0 else 15;
+
+                    chunks[ci].sections[3].blocks[i] = common.chunk.BlockData(.wool, meta);
+                    chunks[ci].sections[3].block_light[i] = 15;
+                    chunks[ci].sections[3].sky_light[i] = 15;
+                }
+            }
+
+            for (&chunks[ci].biomes) |*biome| {
+                biome.* = .plains;
+            }
+        }
+    }
+    break :blk chunks;
+};
+
+const InitialMapMeta: [4]protocol.ChunkMeta = blk: {
+    var meta: [4]protocol.ChunkMeta = undefined;
+    for (0..2) |cx| {
+        for (0..2) |cz| {
+            const ci = cx << 1 | cz;
+            meta[ci].bit_mask = 1 << 4;
+            meta[ci].x = @as(i32, @intCast(cx)) - 1;
+            meta[ci].z = @as(i32, @intCast(cz)) - 1;
+        }
+    }
+    break :blk meta;
+};
+
 fn scheduleTimer(ctx: *common.Context, ud: u64) void {
     const b = ctx.buffer_pools.allocBuf(.@"14") catch return;
 
@@ -73,39 +114,29 @@ fn scheduleRemove(ctx: *common.Context, ud: u64) void {
 
 pub const TntRunModule = struct {
     running: bool = false,
-    chunks: [4]common.chunk.Chunk = blk: {
-        @setEvalBranchQuota(4096);
-        var chunks: [4]common.chunk.Chunk = undefined;
-        for (0..2) |cx| {
-            for (0..2) |cz| {
-                const ci = cx << 1 | cz;
-                for (0..16) |x| {
-                    for (0..16) |z| {
-                        const i = z << 4 | x;
-                        const abs_x = x + 16 * cx;
-                        const abs_z = z + 16 * cz;
-
-                        const meta = if ((abs_x + abs_z) % 2 == 0) 0 else 15;
-
-                        chunks[ci].sections[3].blocks[i] = common.chunk.BlockData(.wool, meta);
-                        chunks[ci].sections[3].block_light[i] = 15;
-                        chunks[ci].sections[3].sky_light[i] = 15;
-                    }
-                }
-
-                for (&chunks[ci].biomes) |*biome| {
-                    biome.* = .plains;
-                }
-            }
-        }
-        break :blk chunks;
-    },
+    chunks: [4]common.chunk.Chunk = InitialMap,
 
     pub fn init(_: std.mem.Allocator) !@This() {
         return @This(){};
     }
 
     pub fn deinit(_: *@This()) void {}
+
+    pub fn onJoin(
+        self: *@This(),
+        ctx: *common.Context,
+        client: *common.client.Client,
+    ) !void {
+        const b = try ctx.buffer_pools.allocBuf(.@"18");
+        errdefer ctx.buffer_pools.releaseBuf(b.idx);
+
+        const size = try (protocol.ClientPlayMapChunkBulk{
+            .chunk_data = &self.chunks,
+            .chunk_meta = &InitialMapMeta,
+            .sky_light = true,
+        }).encode(b.ptr);
+        ctx.ring.prepareOneshot(client.fd, b, size) catch {};
+    }
 
     pub fn onChatMessage(
         self: *@This(),
