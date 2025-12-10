@@ -143,10 +143,7 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
         b.ptr,
     ) catch return;
 
-    ctx.ring.prepareOneshot(noteData.client_fd, b, size) catch {
-        ctx.buffer_pools.releaseBuf(b.idx);
-        return;
-    };
+    ctx.prepareOneshot(noteData.client_fd, b, size);
 }
 
 fn schedulePart(ctx: *common.Context, client_fd: i32, schedule: u8, comptime Array: anytype, comptime P: Part) void {

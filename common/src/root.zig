@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub const zcs = @import("zcs");
+const SpscQueue = @import("spsc_queue").SpscQueue;
 
 pub const buffer = @import("buffer.zig");
 pub const chat = @import("chat.zig");
@@ -8,12 +9,46 @@ pub const chunk = @import("chunk.zig");
 pub const client = @import("client.zig");
 pub const ecs = @import("ecs.zig");
 pub const scheduler = @import("scheduler.zig");
-pub const uring = @import("uring.zig");
 
 pub const ServerMessage = union(enum) {
-    player_join: i32,
+    tick,
+    write_result: buffer.BufferIndex,
+    status_request: i32,
+    status_ping: struct {
+        fd: i32,
+        payload: u64,
+    },
+    player_join: struct {
+        fd: i32,
+        username: [64]u8,
+        username_len: usize,
+        uuid: Uuid,
+        location: ecs.Location,
+    },
+    player_move: struct {
+        fd: i32,
+        d: ecs.Location,
+    },
+    player_chat: struct {
+        fd: i32,
+        message: [128]u8,
+        message_len: usize,
+    },
+    player_quit: i32,
+    stop,
 };
-pub const GameMessage = union(enum) {};
+
+pub const GameMessage = union(enum) {
+    prepare_oneshot: struct {
+        fd: i32,
+        b: *buffer.Buffer,
+        size: usize,
+    },
+    prepare_broadcast: struct {
+        b: *buffer.Buffer,
+        size: usize,
+    },
+};
 
 pub fn ModuleRegistry(comptime Modules: anytype) type {
     return struct {
@@ -81,34 +116,34 @@ pub fn pitchFromMidi(midi: u8) u8 {
 pub const Context = struct {
     entities: *zcs.Entities,
     zcs_alloc: std.mem.Allocator,
-    client_manager: *client.ClientManager,
-    ring: *uring.Ring,
+    client_manager: *client.ClientManager(client.Client),
     buffer_pools: *buffer.BufferPools,
     scheduler: *scheduler.Scheduler,
     module_registry: *anyopaque,
+    tx: *SpscQueue(GameMessage, true),
 
-    pub fn addClient(self: *Context, fd: i32) !*client.Client {
-        var cb = try zcs.CmdBuf.init(.{ .name = null, .gpa = self.zcs_alloc, .es = self.entities });
-        defer cb.deinit(self.zcs_alloc, self.entities);
-
-        const e = zcs.Entity.reserve(&cb);
-        _ = e.add(&cb, ecs.Client, .{ .fd = fd });
-
-        zcs.CmdBuf.Exec.immediate(self.entities, &cb);
-        return self.client_manager.add(fd, e);
+    pub fn prepareOneshot(
+        self: *Context,
+        fd: i32,
+        b: *buffer.Buffer,
+        size: usize,
+    ) void {
+        self.tx.push(.{ .prepare_oneshot = .{
+            .fd = fd,
+            .b = b,
+            .size = size,
+        } });
     }
 
-    pub fn removeClient(self: *Context, fd: i32) !void {
-        const c = self.client_manager.get(fd) orelse return;
-
-        var cb = try zcs.CmdBuf.init(.{ .name = null, .gpa = self.zcs_alloc, .es = self.entities });
-        defer cb.deinit(self.zcs_alloc, self.entities);
-
-        c.e.destroy(&cb);
-
-        zcs.CmdBuf.Exec.immediate(self.entities, &cb);
-
-        self.client_manager.remove(fd);
+    pub fn prepareBroadcast(
+        self: *Context,
+        b: *buffer.Buffer,
+        size: usize,
+    ) void {
+        self.tx.push(.{ .prepare_broadcast = .{
+            .b = b,
+            .size = size,
+        } });
     }
 
     pub fn getModuleRegistry(self: *const Context, comptime T: type) *T {

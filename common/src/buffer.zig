@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const client = @import("client.zig");
-const uring = @import("uring.zig");
 
 pub const BufferType = union(enum) {
     broadcast,

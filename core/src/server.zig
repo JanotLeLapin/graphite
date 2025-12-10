@@ -7,159 +7,105 @@ const SpscQueue = @import("spsc_queue").SpscQueue;
 const root = @import("root");
 const common = @import("graphite-common");
 const protocol = @import("graphite-protocol");
+const uring = @import("uring.zig");
 
 const PORT = 25565;
 const ADDRESS = "0.0.0.0";
 
 const URING_QUEUE_ENTRIES = 4096;
 
-pub const Modules = .{
-    @import("module/vanilla.zig").VanillaModule(.{
-        .send_join_message = true,
-        .send_quit_message = true,
-    }),
-    @import("module/log.zig").LogModule(.{}),
+pub const Client = struct {
+    fd: i32,
+    state: protocol.ClientState,
+    read_buf: [4096]u8,
+    read_buf_tail: usize,
+    addr: std.os.linux.sockaddr,
 };
 
-pub const ModuleRegistry = common.ModuleRegistry(Modules);
-
-fn dispatch(
-    ctx: *common.Context,
-    comptime method_name: []const u8,
-    args: anytype,
-) void {
-    inline for (Modules) |ModuleType| {
-        const instance = ctx.getModuleRegistry(ModuleRegistry).get(ModuleType);
-
-        if (@hasDecl(ModuleType, method_name)) {
-            const method = @field(ModuleType, method_name);
-            const call_args = .{ instance, ctx } ++ args;
-            const result = @call(.auto, method, call_args);
-
-            const ReturnType = @typeInfo(@TypeOf(result));
-            if (ReturnType == .error_union) {
-                result catch |e| {
-                    log.err(
-                        "module {s}: {s}: {s}",
-                        .{
-                            @typeName(ModuleType),
-                            method_name,
-                            @errorName(e),
-                        },
-                    );
-                };
-            }
-        }
-    }
-}
+pub const Context = struct {
+    ring: *uring.Ring,
+    client_manager: *common.client.ClientManager(Client),
+    tx: *SpscQueue(common.ServerMessage, true),
+};
 
 const PacketProcessingError = error{
     EncodingFailure,
 };
 
 fn processPacket(
-    ctx: *common.Context,
-    client: *common.client.Client,
+    ctx: *Context,
+    client: *Client,
     p: protocol.ServerBoundPacket,
 ) !void {
     switch (p) {
         .handshake => client.state = @enumFromInt(p.handshake.next_state),
         .status_request => {
-            dispatch(ctx, "onStatus", .{client});
+            ctx.tx.push(.{ .status_request = client.fd });
         },
         .status_ping => {
-            const b = try ctx.buffer_pools.allocBuf(.@"6");
-            {
-                errdefer ctx.buffer_pools.releaseBuf(b.idx);
-
-                b.ptr[0] = 9;
-                b.ptr[1] = 0x01;
-                @memcpy(b.ptr[2..10], @as([]const u8, @ptrCast(&p.status_ping.payload)));
-
-                try ctx.ring.prepareOneshot(client.fd, b, 10);
-            }
+            ctx.tx.push(.{ .status_ping = .{
+                .fd = client.fd,
+                .payload = p.status_ping.payload,
+            } });
         },
         .login_start => {
-            client.username = std.ArrayListUnmanaged(u8).initBuffer(&client.username_buf);
-            client.username.appendSliceBounded(p.login_start.username[0..@min(p.login_start.username.len, client.username_buf.len - 1)]) catch unreachable;
+            var msg = common.ServerMessage{ .player_join = .{
+                .fd = client.fd,
+                .username = undefined,
+                .username_len = 0,
+                .uuid = undefined,
+                .location = .{
+                    .x = 0.0,
+                    .y = 67.0,
+                    .z = 0.0,
+                    .on_ground = false,
+                },
+            } };
+            msg.player_join.username_len = @min(p.login_start.username.len, 63);
+            @memcpy(msg.player_join.username[0..msg.player_join.username_len], p.login_start.username[0..msg.player_join.username_len]);
 
-            var uuid_buf: [36]u8 = undefined;
-            client.uuid = common.Uuid.random(std.crypto.random);
-            client.uuid.stringify(&uuid_buf);
-
-            log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
-
-            const b = try ctx.buffer_pools.allocBuf(.@"10");
-            errdefer ctx.buffer_pools.releaseBuf(b.idx);
-
-            var offset: usize = 0;
-
-            offset += try protocol.ClientLoginSuccess.encode(&.{
-                .uuid = &uuid_buf,
-                .username = client.username.items,
-            }, b.ptr[offset..]);
-
-            offset += try protocol.ClientPlayJoinGame.encode(&.{
-                .entity_id = 0,
-                .gamemode = protocol.Gamemode(.survival, false),
-                .dimension = .overworld,
-                .difficulty = .normal,
-                .max_players = 20,
-                .level_type = "default",
-                .reduced_debug_info = false,
-            }, b.ptr[offset..]);
-
-            offset += try protocol.ClientPlayPlayerPositionAndLook.encode(&.{
-                .x = 0.0,
-                .y = 67.0,
-                .z = 0.0,
-                .yaw = 0.0,
-                .pitch = 0.0,
-                .flags = 0,
-            }, b.ptr[offset..]);
-
-            try ctx.ring.prepareOneshot(client.fd, b, offset);
             client.state = .play;
 
-            var cb = try common.zcs.CmdBuf.init(.{
-                .name = null,
-                .gpa = ctx.zcs_alloc,
-                .es = ctx.entities,
-            });
-            defer cb.deinit(ctx.zcs_alloc, ctx.entities);
-
-            _ = client.e.add(&cb, common.ecs.Location, .{ .x = 0.0, .y = 67.0, .z = 0.0, .on_ground = false });
-
-            common.zcs.CmdBuf.Exec.immediate(ctx.entities, &cb);
-
-            dispatch(ctx, "onJoin", .{client});
+            ctx.tx.push(msg);
         },
         .play_chat_message => |pd| {
-            dispatch(ctx, "onChatMessage", .{ client, pd.message });
+            const len = @min(pd.message.len, 128);
+            var msg = common.ServerMessage{ .player_chat = .{
+                .fd = client.fd,
+                .message_len = len,
+                .message = undefined,
+            } };
+
+            @memcpy(msg.player_chat.message[0..len], pd.message[0..len]);
+            ctx.tx.push(msg);
         },
         .play_player_position => |pd| {
-            const l = client.e.get(ctx.entities, common.ecs.Location).?;
-            l.x = pd.x;
-            l.y = pd.y;
-            l.z = pd.z;
-            l.on_ground = pd.on_ground;
-
-            dispatch(ctx, "onMove", .{client});
+            ctx.tx.push(.{ .player_move = .{
+                .fd = client.fd,
+                .d = .{
+                    .x = pd.x,
+                    .y = pd.y,
+                    .z = pd.z,
+                    .on_ground = pd.on_ground,
+                },
+            } });
         },
         .play_player_position_and_look => |pd| {
-            const l = client.e.get(ctx.entities, common.ecs.Location).?;
-            l.x = pd.x;
-            l.y = pd.y;
-            l.z = pd.z;
-            l.on_ground = pd.on_ground;
-
-            dispatch(ctx, "onMove", .{client});
+            ctx.tx.push(.{ .player_move = .{
+                .fd = client.fd,
+                .d = .{
+                    .x = pd.x,
+                    .y = pd.y,
+                    .z = pd.z,
+                    .on_ground = pd.on_ground,
+                },
+            } });
         },
         else => {},
     }
 }
 
-fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
+fn splitPackets(ctx: *Context, client: *Client) void {
     var global_offset: usize = 0;
     while (true) {
         var offset = global_offset;
@@ -227,33 +173,11 @@ fn createServer() !i32 {
     return server_fd;
 }
 
-fn keepaliveTask(ctx: *common.Context, _: u64) void {
-    ctx.scheduler.schedule(&keepaliveTask, 200, 0) catch {};
-
-    const b = ctx.buffer_pools.allocBuf(.@"6") catch return;
-
-    const size = protocol.ClientPlayKeepAlive.encode(
-        &.{ .id = protocol.types.VarInt{ .value = 67 } },
-        b.ptr,
-    ) catch return;
-
-    ctx.ring.prepareBroadcast(ctx, b, size) catch {
-        ctx.buffer_pools.releaseBuf(b.idx);
-        return;
-    };
-}
-
 pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.ServerMessage, true)) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
-    const zcs_alloc = gpa.allocator();
-    var entities = try common.zcs.Entities.init(.{
-        .gpa = zcs_alloc,
-    });
-    defer entities.deinit(zcs_alloc);
-
-    var client_manager = try common.client.ClientManager.init(8, gpa.allocator(), gpa.allocator());
+    var client_manager = try common.client.ClientManager(Client).init(8, gpa.allocator(), gpa.allocator());
     defer client_manager.deinit();
 
     const sig_fd = try createSig();
@@ -271,46 +195,31 @@ pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.Serv
 
     log.info("server listening on port {d}.", .{PORT});
 
-    var ring = try common.uring.Ring.init(gpa.allocator(), URING_QUEUE_ENTRIES);
+    var ring = try uring.Ring.init(gpa.allocator(), URING_QUEUE_ENTRIES);
     defer ring.deinit();
 
-    var buffer_pools = try common.buffer.BufferPools.init(gpa.allocator());
-    defer buffer_pools.deinit();
-
-    var scheduler = common.scheduler.Scheduler.init(gpa.allocator());
-    defer scheduler.deinit();
-
-    try scheduler.schedule(&keepaliveTask, 200, 0);
-
-    var module_registry = try ModuleRegistry.init(gpa.allocator());
-    defer module_registry.deinit();
-
-    var ctx = common.Context{
-        .entities = &entities,
-        .zcs_alloc = zcs_alloc,
+    var ctx = Context{
         .client_manager = &client_manager,
         .ring = &ring,
-        .buffer_pools = &buffer_pools,
-        .scheduler = &scheduler,
-        .module_registry = &module_registry,
+        .tx = tx,
     };
 
     {
         const sqe = try ring.getSqe();
         sqe.prep_accept(server_fd, &addr, &addr_len, 0);
-        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .accept, .d = 0, .fd = 0 });
+        sqe.user_data = @bitCast(uring.Userdata{ .op = .accept, .d = 0, .fd = 0 });
     }
 
     {
         const sqe = try ring.getSqe();
         sqe.prep_read(sig_fd, @ptrCast(&siginfo), 0);
-        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .sigint, .d = 0, .fd = 0 });
+        sqe.user_data = @bitCast(uring.Userdata{ .op = .sigint, .d = 0, .fd = 0 });
     }
 
     {
         const sqe = try ring.getSqe();
         sqe.prep_read(timer_fd, @ptrCast(&tinfo), 0);
-        sqe.user_data = @bitCast(common.uring.Userdata{ .op = .timer, .d = 0, .fd = 0 });
+        sqe.user_data = @bitCast(uring.Userdata{ .op = .timer, .d = 0, .fd = 0 });
     }
 
     _ = try ring.submit();
@@ -320,7 +229,7 @@ pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.Serv
         var cqe = try ring.waitCqe();
 
         while (true) {
-            const ud: common.uring.Userdata = @bitCast(cqe.user_data);
+            const ud: uring.Userdata = @bitCast(cqe.user_data);
             switch (ud.op) {
                 .accept => {
                     if (cqe.res < 0) {
@@ -331,11 +240,12 @@ pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.Serv
                         const cfd = cqe.res;
                         log.debug("client: {d} connected", .{cfd});
 
-                        var client = try ctx.addClient(cfd);
+                        var client = try client_manager.add(cfd);
+                        client.fd = cfd;
+                        client.read_buf_tail = 0;
                         client.state = .handshake;
                         client.addr = addr;
 
-                        tx.push(.{ .player_join = cfd });
                         try ring.prepareRead(cfd, &client.read_buf);
                     }
 
@@ -343,27 +253,31 @@ pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.Serv
                 },
                 .sigint => {
                     log.info("caught sigint", .{});
+                    tx.push(.{ .stop = {} });
                     running = false;
                 },
                 .timer => {
                     try ring.prepareTimer(timer_fd, &tinfo);
-                    scheduler.tick(&ctx);
+                    tx.push(.{ .tick = {} });
                 },
                 .read => {
                     const cfd = ud.fd;
-                    if (cqe.res < 0) {
-                        const errcode: usize = @intCast(-cqe.res);
-                        const err = std.posix.errno(errcode);
-                        log.err("cqe error: read: {s}", .{@tagName(err)});
-                        try ctx.removeClient(cfd);
-                    } else {
-                        if (client_manager.get(cfd)) |client| {
+                    if (client_manager.get(cfd)) |client| {
+                        if (cqe.res < 0) {
+                            const errcode: usize = @intCast(-cqe.res);
+                            const err = std.posix.errno(errcode);
+                            log.err("cqe error: read: {s}", .{@tagName(err)});
+                            if (client.state == .play) {
+                                tx.push(.{ .player_quit = cfd });
+                            }
+                            client_manager.remove(cfd);
+                        } else {
                             const bytes: usize = @intCast(cqe.res);
                             if (0 == bytes) {
                                 if (client.state == .play) {
-                                    dispatch(&ctx, "onQuit", .{client});
+                                    tx.push(.{ .player_quit = cfd });
                                 }
-                                try ctx.removeClient(cfd);
+                                client_manager.remove(cfd);
                                 log.debug("client: {d} disconnected", .{cfd});
                             } else {
                                 client.read_buf_tail += bytes;
@@ -381,14 +295,14 @@ pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.Serv
                         const errcode: usize = @intCast(-cqe.res);
                         const err = std.posix.errno(errcode);
                         log.err("cqe error: write: {s}", .{@tagName(err)});
-                        try ctx.removeClient(cfd);
-                    } else if (cqe.res > 0) {} else {
-                        const idx: common.buffer.BufferIndex = @bitCast(ud.d);
-                        const b = ctx.buffer_pools.get(idx);
-                        b.ref_count -= 1;
-                        if (0 == b.ref_count) {
-                            ctx.buffer_pools.releaseBuf(idx);
+                        if (client_manager.get(cfd)) |c| {
+                            if (c.state == .play) {
+                                tx.push(.{ .player_quit = cfd });
+                            }
                         }
+                        client_manager.remove(cfd);
+                    } else if (cqe.res > 0) {} else {
+                        tx.push(.{ .write_result = @bitCast(ud.d) });
                     }
                 },
             }
@@ -398,15 +312,20 @@ pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.Serv
         _ = try ring.pump(&ctx);
         _ = try ring.submit();
 
-        while (rx.front()) |_| {
+        while (rx.front()) |msg| {
+            switch (msg.*) {
+                .prepare_oneshot => |d| {
+                    ring.prepareOneshot(d.fd, d.b, d.size) catch {
+                        log.warn("memory leak!", .{});
+                    };
+                },
+                .prepare_broadcast => |d| {
+                    ring.prepareBroadcast(&ctx, d.b, d.size) catch {
+                        log.warn("memory leak!", .{});
+                    };
+                },
+            }
             rx.pop();
         }
-    }
-
-    inline for (std.meta.fields(common.buffer.BufferPools)) |field| {
-        log.debug(
-            "busy buffers on " ++ field.name ++ ": {d}",
-            .{@field(buffer_pools, field.name).busy_count},
-        );
     }
 }

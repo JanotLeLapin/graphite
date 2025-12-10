@@ -1,7 +1,9 @@
 const std = @import("std");
 
-const root = @import("root.zig");
-const Buffer = root.buffer.Buffer;
+const server = @import("server.zig");
+const common = @import("graphite-common");
+
+const Buffer = common.buffer.Buffer;
 
 pub const UserdataOp = enum(u4) {
     accept,
@@ -44,7 +46,7 @@ pub const RingTask = union(enum) {
     pub fn pump(
         self: *RingTask,
         ring: *Ring,
-        clients: []root.client.ClientSlot,
+        clients: []common.client.ClientSlot(server.Client),
     ) !bool {
         switch (self.*) {
             .accept => |*a| {
@@ -316,7 +318,7 @@ pub const Ring = struct {
 
     pub fn prepareBroadcast(
         self: *Ring,
-        ctx: *root.Context,
+        ctx: *server.Context,
         b: *Buffer,
         size: usize,
     ) !void {
@@ -343,7 +345,7 @@ pub const Ring = struct {
         if (b.ref_count == 0) return RingError.ZeroBroadcast;
     }
 
-    pub fn pump(self: *Ring, ctx: *root.Context) !void {
+    pub fn pump(self: *Ring, ctx: *server.Context) !void {
         while (self.tasks.first) |node| {
             const task_node: *RingTaskNode = @fieldParentPtr("node", node);
             const finished = try task_node.data.pump(self, ctx.client_manager.lookup.items);

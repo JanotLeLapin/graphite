@@ -5,6 +5,7 @@ const SpscQueue = @import("spsc_queue").SpscQueue;
 const common = @import("graphite-common");
 const game = @import("game.zig");
 const server = @import("server.zig");
+const uring = @import("uring.zig");
 
 pub fn log(
     comptime message_level: std.log.Level,

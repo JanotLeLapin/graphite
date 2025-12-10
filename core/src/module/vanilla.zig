@@ -37,7 +37,7 @@ fn broadcastMessage(
         },
         b.ptr,
     );
-    try ctx.ring.prepareBroadcast(ctx, b, size);
+    ctx.prepareBroadcast(b, size);
 }
 
 pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
@@ -53,28 +53,25 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
         pub fn onStatus(
             _: *@This(),
             ctx: *common.Context,
-            client: *common.client.Client,
+            fd: i32,
         ) !void {
             const status = opt.status orelse return;
 
             const b = try ctx.buffer_pools.allocBuf(.@"10");
-            {
-                errdefer ctx.buffer_pools.releaseBuf(b.idx);
+            errdefer ctx.buffer_pools.releaseBuf(b.idx);
 
-                var json: [512]u8 = undefined;
-                const size = try protocol.ClientStatusResponse.encode(
-                    &.{
-                        .response = try std.fmt.bufPrint(json[0..], "{{\"version\":{{\"name\":\"" ++ status.version_name ++ "\",\"protocol\":47}},\"players\":{{\"max\":20,\"online\":{d},\"sample\":[]}},\"description\":{f}}}", .{
-                            0,
-                            status.description,
-                        }),
-                    },
-                    b.ptr,
-                );
+            var json: [512]u8 = undefined;
+            const size = try protocol.ClientStatusResponse.encode(
+                &.{
+                    .response = try std.fmt.bufPrint(json[0..], "{{\"version\":{{\"name\":\"" ++ status.version_name ++ "\",\"protocol\":47}},\"players\":{{\"max\":20,\"online\":{d},\"sample\":[]}},\"description\":{f}}}", .{
+                        0,
+                        status.description,
+                    }),
+                },
+                b.ptr,
+            );
 
-                try ctx.ring.prepareOneshot(client.fd, b, size);
-            }
-            _ = try ctx.ring.submit();
+            ctx.prepareOneshot(fd, b, size);
         }
 
         pub fn onJoin(

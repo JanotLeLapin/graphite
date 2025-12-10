@@ -6,6 +6,13 @@ pub const common = @import("graphite-common");
 
 pub const types = @import("types/mod.zig");
 
+pub const ClientState = enum(u8) {
+    handshake = 0,
+    status = 1,
+    login = 2,
+    play = 3,
+};
+
 pub const GamemodeType = enum(u8) {
     survival = 0,
     creative = 1,
@@ -307,7 +314,7 @@ pub const ServerBoundPacket = union(enum) {
     play_player_digging: ServerPlayPlayerDigging,
 
     pub fn decode(
-        state: common.client.ClientState,
+        state: ClientState,
         packet_id: i32,
         buf: []const u8,
     ) !ServerBoundPacket {

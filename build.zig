@@ -36,6 +36,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     common_mod.addImport("zcs", zcs_dep.module("zcs"));
+    common_mod.addImport("spsc_queue", spsc_queue_dep.module("spsc_queue"));
 
     const protocol_mod = b.addModule("graphite-protocol", .{
         .root_source_file = b.path("protocol/src/root.zig"),
