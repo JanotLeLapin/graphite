@@ -1,10 +1,15 @@
+/// pachelbel.zig
+///
+/// plays pachelbel's canon in a loop to every player on join
 const std = @import("std");
 
 const common = @import("graphite-common");
 const protocol = @import("graphite-protocol");
 
+/// data passed to a task callback
 const ScheduleTaskData = packed struct(u64) {
     client_fd: i32,
+    /// the index of the pattern that should be scheduled
     schedule: u8,
     _: u24 = 0,
 };
@@ -129,12 +134,17 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
     const noteData: NoteTaskData = @bitCast(userdata);
 
     const client = ctx.client_manager.get(noteData.client_fd) orelse return;
+    // get location component from player entity
     const l = client.e.get(ctx.entities, common.ecs.Location) orelse return;
 
+    // allocate a buffer of 2^10 bytes
     const b = ctx.buffer_pools.allocBuf(.@"10") catch return;
+    // encode sound packet into the buffer
     const size = protocol.ClientPlaySoundEffect.encode(
         &.{
             .sound_name = noteData.instrument.getName(),
+            // i genuinely don't know why coordinates must be
+            // multiplied by 8 here
             .x = @intFromFloat(l.x * 8),
             .y = @intFromFloat(l.y * 8),
             .z = @intFromFloat(l.z * 8),
@@ -142,8 +152,13 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
             .pitch = common.pitchFromMidi(noteData.midi),
         },
         b.ptr,
-    ) catch return;
+    ) catch {
+        // release buffer if encoding failed
+        ctx.buffer_pools.releaseBuf(b.idx);
+        return;
+    };
 
+    // send buffer to client
     ctx.prepareOneshot(noteData.client_fd, b, size);
 }
 
