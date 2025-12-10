@@ -424,5 +424,10 @@ pub fn main() !void {
         _ = try ring.submit();
     }
 
-    // std.log.debug("busy buffers on exit: {d}", .{buffer_pool.busy_count});
+    inline for (std.meta.fields(common.buffer.BufferPools)) |field| {
+        std.log.debug(
+            "busy buffers on " ++ field.name ++ ": {d}",
+            .{@field(buffer_pools, field.name).busy_count},
+        );
+    }
 }
