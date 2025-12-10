@@ -59,7 +59,7 @@ fn dispatch(
     }
 }
 
-pub fn main(rx: *SpscQueue(common.ServerMessage, true), tx: *SpscQueue(common.GameMessage, true)) !void {
+pub fn main(efd: i32, rx: *SpscQueue(common.ServerMessage, true), tx: *SpscQueue(common.GameMessage, true)) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
@@ -91,6 +91,7 @@ pub fn main(rx: *SpscQueue(common.ServerMessage, true), tx: *SpscQueue(common.Ga
         .scheduler = &scheduler,
         .module_registry = &module_registry,
         .tx = tx,
+        .efd = efd,
     };
 
     var running = true;

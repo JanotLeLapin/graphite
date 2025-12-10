@@ -121,6 +121,7 @@ pub const Context = struct {
     scheduler: *scheduler.Scheduler,
     module_registry: *anyopaque,
     tx: *SpscQueue(GameMessage, true),
+    efd: i32,
 
     pub fn prepareOneshot(
         self: *Context,
@@ -133,6 +134,9 @@ pub const Context = struct {
             .b = b,
             .size = size,
         } });
+
+        const val: u64 = 0;
+        _ = std.os.linux.write(self.efd, std.mem.asBytes(&val), 8);
     }
 
     pub fn prepareBroadcast(
@@ -144,6 +148,9 @@ pub const Context = struct {
             .b = b,
             .size = size,
         } });
+
+        const val: u64 = 0;
+        _ = std.os.linux.write(self.efd, std.mem.asBytes(&val), 8);
     }
 
     pub fn getModuleRegistry(self: *const Context, comptime T: type) *T {

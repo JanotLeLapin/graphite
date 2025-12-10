@@ -9,6 +9,7 @@ pub const UserdataOp = enum(u4) {
     accept,
     sigint,
     timer,
+    event,
     read,
     write,
 };
@@ -29,6 +30,7 @@ pub const RingTask = union(enum) {
         tfd: i32,
         tinfo: *u64,
     },
+    event: i32,
     read: struct {
         cfd: i32,
         buffer: []u8,
@@ -59,6 +61,12 @@ pub const RingTask = union(enum) {
                 var sqe = ring.getSqe() catch return false;
                 sqe.prep_read(t.tfd, @ptrCast(t.tinfo), 0);
                 sqe.user_data = @bitCast(Userdata{ .op = .timer, .d = 0, .fd = 0 });
+                return true;
+            },
+            .event => |e| {
+                const sqe = try ring.getSqe();
+                sqe.prep_poll_add(e, std.os.linux.POLL.IN);
+                sqe.user_data = @bitCast(Userdata{ .op = .event, .d = 0, .fd = 0 });
                 return true;
             },
             .read => |*r| {
@@ -293,6 +301,18 @@ pub const Ring = struct {
         };
         sqe.prep_read(fd, @ptrCast(tinfo), 0);
         sqe.user_data = @bitCast(Userdata{ .op = .timer, .d = 0, .fd = 0 });
+    }
+
+    pub fn prepareEvent(
+        self: *Ring,
+        fd: i32,
+    ) !void {
+        const sqe = self.getSqe() catch {
+            try self.insertTask(.{ .event = fd });
+            return;
+        };
+        sqe.prep_poll_add(fd, std.os.linux.POLL.IN);
+        sqe.user_data = @bitCast(Userdata{ .op = .event, .d = 0, .fd = 0 });
     }
 
     pub fn prepareOneshot(

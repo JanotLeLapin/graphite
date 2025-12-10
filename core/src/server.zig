@@ -173,7 +173,7 @@ fn createServer() !i32 {
     return server_fd;
 }
 
-pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.ServerMessage, true)) !void {
+pub fn main(efd: i32, rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.ServerMessage, true)) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
@@ -222,6 +222,12 @@ pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.Serv
         sqe.user_data = @bitCast(uring.Userdata{ .op = .timer, .d = 0, .fd = 0 });
     }
 
+    {
+        const sqe = try ring.getSqe();
+        sqe.prep_poll_add(efd, std.os.linux.POLL.IN);
+        sqe.user_data = @bitCast(uring.Userdata{ .op = .event, .d = 0, .fd = 0 });
+    }
+
     _ = try ring.submit();
 
     var running = true;
@@ -259,6 +265,24 @@ pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.Serv
                 .timer => {
                     try ring.prepareTimer(timer_fd, &tinfo);
                     tx.push(.{ .tick = {} });
+                },
+                .event => {
+                    try ring.prepareEvent(efd);
+                    while (rx.front()) |msg| {
+                        switch (msg.*) {
+                            .prepare_oneshot => |d| {
+                                ring.prepareOneshot(d.fd, d.b, d.size) catch {
+                                    log.warn("memory leak!", .{});
+                                };
+                            },
+                            .prepare_broadcast => |d| {
+                                ring.prepareBroadcast(&ctx, d.b, d.size) catch {
+                                    log.warn("memory leak!", .{});
+                                };
+                            },
+                        }
+                        rx.pop();
+                    }
                 },
                 .read => {
                     const cfd = ud.fd;
@@ -311,21 +335,5 @@ pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.Serv
 
         _ = try ring.pump(&ctx);
         _ = try ring.submit();
-
-        while (rx.front()) |msg| {
-            switch (msg.*) {
-                .prepare_oneshot => |d| {
-                    ring.prepareOneshot(d.fd, d.b, d.size) catch {
-                        log.warn("memory leak!", .{});
-                    };
-                },
-                .prepare_broadcast => |d| {
-                    ring.prepareBroadcast(&ctx, d.b, d.size) catch {
-                        log.warn("memory leak!", .{});
-                    };
-                },
-            }
-            rx.pop();
-        }
     }
 }
