@@ -1,5 +1,9 @@
 const std = @import("std");
 
+const SpscQueue = @import("spsc_queue").SpscQueue;
+
+const common = @import("graphite-common");
+const game = @import("game.zig");
 const server = @import("server.zig");
 
 pub fn log(
@@ -40,6 +44,15 @@ pub fn main() !void {
     std.posix.sigaddset(&set, std.posix.SIG.INT);
     std.posix.sigprocmask(std.posix.SIG.BLOCK, &set, null);
 
-    const thread = try std.Thread.spawn(.{}, server.main, .{});
-    thread.join();
+    var server_queue = try SpscQueue(common.GameMessage, true).initCapacity(std.heap.page_allocator, 64);
+    defer server_queue.deinit();
+
+    var game_queue = try SpscQueue(common.ServerMessage, true).initCapacity(std.heap.page_allocator, 64);
+    defer game_queue.deinit();
+
+    const server_thread = try std.Thread.spawn(.{}, server.main, .{ &server_queue, &game_queue });
+    const game_thread = try std.Thread.spawn(.{}, game.main, .{ &game_queue, &server_queue });
+
+    server_thread.join();
+    game_thread.join();
 }

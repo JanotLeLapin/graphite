@@ -2,6 +2,9 @@ const std = @import("std");
 
 const log = std.log.scoped(.server);
 
+const SpscQueue = @import("spsc_queue").SpscQueue;
+
+const root = @import("root");
 const common = @import("graphite-common");
 const protocol = @import("graphite-protocol");
 
@@ -240,7 +243,7 @@ fn keepaliveTask(ctx: *common.Context, _: u64) void {
     };
 }
 
-pub fn main() !void {
+pub fn main(rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.ServerMessage, true)) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
@@ -332,6 +335,7 @@ pub fn main() !void {
                         client.state = .handshake;
                         client.addr = addr;
 
+                        tx.push(.{ .player_join = cfd });
                         try ring.prepareRead(cfd, &client.read_buf);
                     }
 
@@ -393,6 +397,10 @@ pub fn main() !void {
 
         _ = try ring.pump(&ctx);
         _ = try ring.submit();
+
+        while (rx.front()) |_| {
+            rx.pop();
+        }
     }
 
     inline for (std.meta.fields(common.buffer.BufferPools)) |field| {

@@ -10,6 +10,11 @@ pub const ecs = @import("ecs.zig");
 pub const scheduler = @import("scheduler.zig");
 pub const uring = @import("uring.zig");
 
+pub const ServerMessage = union(enum) {
+    player_join: i32,
+};
+pub const GameMessage = union(enum) {};
+
 pub fn ModuleRegistry(comptime Modules: anytype) type {
     return struct {
         instances: std.meta.Tuple(&Modules),

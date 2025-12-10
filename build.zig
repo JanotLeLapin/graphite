@@ -26,6 +26,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const spsc_queue_dep = b.dependency("spsc_queue", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const common_mod = b.addModule("graphite-common", .{
         .root_source_file = b.path("common/src/root.zig"),
         .target = target,
@@ -77,6 +82,8 @@ pub fn build(b: *std.Build) void {
                 // importing modules from different packages).
                 .{ .name = "graphite-common", .module = common_mod },
                 .{ .name = "graphite-protocol", .module = protocol_mod },
+
+                .{ .name = "spsc_queue", .module = spsc_queue_dep.module("spsc_queue") },
             },
         }),
     });
