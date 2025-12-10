@@ -407,7 +407,7 @@ pub fn main() !void {
                         const err = std.posix.errno(errcode);
                         std.log.err("cqe error: write: {s}", .{@tagName(err)});
                         try ctx.removeClient(cfd);
-                    } else {
+                    } else if (cqe.res > 0) {} else {
                         const idx: common.buffer.BufferIndex = @bitCast(ud.d);
                         const b = ctx.buffer_pools.get(idx);
                         b.ref_count -= 1;

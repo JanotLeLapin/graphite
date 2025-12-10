@@ -67,7 +67,7 @@ pub const RingTask = union(enum) {
             },
             .oneshot => |*o| {
                 var sqe = ring.getSqe() catch return false;
-                sqe.prep_write(o.cfd, o.buffer.ptr[0..o.buffer.size], 0);
+                sqe.prep_send_zc(o.cfd, o.buffer.ptr[0..o.buffer.size], 0, 0);
                 sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @bitCast(o.buffer.idx), .fd = o.cfd });
                 return true;
             },
@@ -81,7 +81,7 @@ pub const RingTask = union(enum) {
 
                     if (slot.client) |c| {
                         var sqe = ring.getSqe() catch return false;
-                        sqe.prep_write(c.fd, b.buffer.ptr[0..b.buffer.size], 0);
+                        sqe.prep_send_zc(c.fd, b.buffer.ptr[0..b.buffer.size], 0, 0);
                         sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @bitCast(b.buffer.idx), .fd = c.fd });
                         b.buffer.ref_count += 1;
                     }
@@ -310,7 +310,7 @@ pub const Ring = struct {
             } });
             return;
         };
-        sqe.prep_write(fd, b.ptr[0..size], 0);
+        sqe.prep_send_zc(fd, b.ptr[0..size], 0, 0);
         sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @bitCast(b.idx), .fd = fd });
     }
 
@@ -335,7 +335,7 @@ pub const Ring = struct {
                     } });
                     return;
                 };
-                sqe.prep_write(c.fd, b.ptr[0..size], 0);
+                sqe.prep_send_zc(c.fd, b.ptr[0..size], 0, 0);
                 sqe.user_data = @bitCast(Userdata{ .op = .write, .d = @bitCast(b.idx), .fd = c.fd });
                 b.ref_count += 1;
             }
