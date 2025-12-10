@@ -24,7 +24,7 @@ pub const ServerMessage = union(enum) {
         fd: i32,
         username: [64]u8,
         username_len: usize,
-        uuid: Uuid,
+        addr: std.os.linux.sockaddr,
         location: ecs.Location,
     },
     player_move: struct {

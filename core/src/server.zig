@@ -49,11 +49,12 @@ fn processPacket(
             } });
         },
         .login_start => {
+            std.log.info("{d}", .{client.addr.family});
             var msg = common.ServerMessage{ .player_join = .{
                 .fd = client.fd,
                 .username = undefined,
                 .username_len = 0,
-                .uuid = undefined,
+                .addr = client.addr,
                 .location = .{
                     .x = 0.0,
                     .y = 67.0,

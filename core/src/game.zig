@@ -145,10 +145,11 @@ pub fn main(efd: i32, rx: *SpscQueue(common.ServerMessage, true), tx: *SpscQueue
                     c.e = e;
                     c.username = std.ArrayListUnmanaged(u8).initBuffer(&c.username_buf);
                     c.username.appendSliceBounded(d.username[0..d.username_len]) catch unreachable;
+                    c.addr = d.addr;
 
                     var uuid_buf: [36]u8 = undefined;
-                    msg.player_join.uuid = common.Uuid.random(std.crypto.random);
-                    msg.player_join.uuid.stringify(&uuid_buf);
+                    c.uuid = common.Uuid.random(std.crypto.random);
+                    c.uuid.stringify(&uuid_buf);
 
                     const b = try ctx.buffer_pools.allocBuf(.@"10");
                     errdefer ctx.buffer_pools.releaseBuf(b.idx);

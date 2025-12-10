@@ -7,6 +7,7 @@ const Uuid = @import("root.zig").Uuid;
 pub const Client = struct {
     fd: i32,
     e: zcs.Entity,
+    addr: std.os.linux.sockaddr,
     username_buf: [64]u8,
     username: std.ArrayListUnmanaged(u8),
     uuid: Uuid,
