@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const log = std.log.scoped(.server);
+
 const common = @import("graphite-common");
 const protocol = @import("graphite-protocol");
 
@@ -34,7 +36,7 @@ fn dispatch(
             const ReturnType = @typeInfo(@TypeOf(result));
             if (ReturnType == .error_union) {
                 result catch |e| {
-                    std.log.err(
+                    log.err(
                         "module {s}: {s}: {s}",
                         .{
                             @typeName(ModuleType),
@@ -82,7 +84,7 @@ fn processPacket(
             client.uuid = common.Uuid.random(std.crypto.random);
             client.uuid.stringify(&uuid_buf);
 
-            std.log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
+            log.debug("client: {d}, username: '{s}'", .{ client.fd, client.username.items });
 
             const b = try ctx.buffer_pools.allocBuf(.@"10");
             errdefer ctx.buffer_pools.releaseBuf(b.idx);
@@ -177,7 +179,7 @@ fn splitPackets(ctx: *common.Context, client: *common.client.Client) void {
         };
 
         processPacket(ctx, client, p) catch |e| {
-            std.log.debug("client: {d}, failed to process packet with id {x}: {s}", .{ client.fd, id.value, @errorName(e) });
+            log.debug("client: {d}, failed to process packet with id {x}: {s}", .{ client.fd, id.value, @errorName(e) });
         };
 
         global_offset = packet_end;
@@ -264,7 +266,7 @@ pub fn main() !void {
     var addr: std.os.linux.sockaddr = undefined;
     var addr_len: std.os.linux.socklen_t = @sizeOf(@TypeOf(addr));
 
-    std.log.info("server listening on port {d}.", .{PORT});
+    log.info("server listening on port {d}.", .{PORT});
 
     var ring = try common.uring.Ring.init(gpa.allocator(), URING_QUEUE_ENTRIES);
     defer ring.deinit();
@@ -321,10 +323,10 @@ pub fn main() !void {
                     if (cqe.res < 0) {
                         const errcode: usize = @intCast(-cqe.res);
                         const err = std.posix.errno(errcode);
-                        std.log.err("cqe error: accept: {s}", .{@tagName(err)});
+                        log.err("cqe error: accept: {s}", .{@tagName(err)});
                     } else {
                         const cfd = cqe.res;
-                        std.log.debug("client: {d} connected", .{cfd});
+                        log.debug("client: {d} connected", .{cfd});
 
                         var client = try ctx.addClient(cfd);
                         client.state = .handshake;
@@ -336,7 +338,7 @@ pub fn main() !void {
                     try ring.prepareAccept(server_fd, &addr, &addr_len);
                 },
                 .sigint => {
-                    std.log.info("caught sigint", .{});
+                    log.info("caught sigint", .{});
                     running = false;
                 },
                 .timer => {
@@ -348,7 +350,7 @@ pub fn main() !void {
                     if (cqe.res < 0) {
                         const errcode: usize = @intCast(-cqe.res);
                         const err = std.posix.errno(errcode);
-                        std.log.err("cqe error: read: {s}", .{@tagName(err)});
+                        log.err("cqe error: read: {s}", .{@tagName(err)});
                         try ctx.removeClient(cfd);
                     } else {
                         if (client_manager.get(cfd)) |client| {
@@ -358,7 +360,7 @@ pub fn main() !void {
                                     dispatch(&ctx, "onQuit", .{client});
                                 }
                                 try ctx.removeClient(cfd);
-                                std.log.debug("client: {d} disconnected", .{cfd});
+                                log.debug("client: {d} disconnected", .{cfd});
                             } else {
                                 client.read_buf_tail += bytes;
 
@@ -374,7 +376,7 @@ pub fn main() !void {
                     if (cqe.res < 0) {
                         const errcode: usize = @intCast(-cqe.res);
                         const err = std.posix.errno(errcode);
-                        std.log.err("cqe error: write: {s}", .{@tagName(err)});
+                        log.err("cqe error: write: {s}", .{@tagName(err)});
                         try ctx.removeClient(cfd);
                     } else if (cqe.res > 0) {} else {
                         const idx: common.buffer.BufferIndex = @bitCast(ud.d);
@@ -394,7 +396,7 @@ pub fn main() !void {
     }
 
     inline for (std.meta.fields(common.buffer.BufferPools)) |field| {
-        std.log.debug(
+        log.debug(
             "busy buffers on " ++ field.name ++ ": {d}",
             .{@field(buffer_pools, field.name).busy_count},
         );
