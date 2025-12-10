@@ -578,8 +578,8 @@ pub const ClientPlayBlockChange = struct {
 
 pub const ClientPlayMapChunkBulk = struct {
     sky_light: bool,
-    chunk_meta: []ChunkMeta,
-    chunk_data: []common.chunk.Chunk,
+    chunk_meta: []const ChunkMeta,
+    chunk_data: []const common.chunk.Chunk,
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
         var offset: usize = 5;
