@@ -26,6 +26,7 @@ pub fn ClientManager(comptime T: type) type {
         lookup_alloc: std.mem.Allocator,
         client_alloc: std.mem.Allocator,
         global_generation: u64,
+        count: u64,
 
         pub fn init(
             initCap: usize,
@@ -37,6 +38,7 @@ pub fn ClientManager(comptime T: type) type {
                 .lookup_alloc = lookup_alloc,
                 .client_alloc = client_alloc,
                 .global_generation = 0,
+                .count = 0,
             };
         }
 
@@ -78,6 +80,7 @@ pub fn ClientManager(comptime T: type) type {
             };
 
             self.global_generation += 1;
+            self.count += 1;
 
             return client;
         }
@@ -95,6 +98,7 @@ pub fn ClientManager(comptime T: type) type {
             if (self.lookup.items[ufd].client) |conn| {
                 self.client_alloc.destroy(conn);
                 self.lookup.items[ufd].client = null;
+                self.count -= 1;
             }
         }
     };

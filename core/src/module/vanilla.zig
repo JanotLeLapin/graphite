@@ -64,7 +64,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
             const size = try protocol.ClientStatusResponse.encode(
                 &.{
                     .response = try std.fmt.bufPrint(json[0..], "{{\"version\":{{\"name\":\"" ++ status.version_name ++ "\",\"protocol\":47}},\"players\":{{\"max\":20,\"online\":{d},\"sample\":[]}},\"description\":{f}}}", .{
-                        0,
+                        ctx.client_manager.count,
                         status.description,
                     }),
                 },
