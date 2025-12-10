@@ -77,8 +77,6 @@ fn scheduleTimer(ctx: *common.Context, ud: u64) void {
             ctx.buffer_pools.releaseBuf(b.idx);
             return;
         };
-        const mod = common.ModuleRegistry.get(&ctx.module_registry, TntRunModule);
-        mod.running = true;
     }
 
     offset += switch (ud) {
@@ -92,7 +90,7 @@ fn scheduleTimer(ctx: *common.Context, ud: u64) void {
         return;
     };
 
-    ctx.ring.prepareBroadcast(ctx, b, offset) catch {};
+    ctx.prepareBroadcast(b, offset);
 }
 
 fn scheduleRemove(ctx: *common.Context, ud: u64) void {
@@ -109,7 +107,12 @@ fn scheduleRemove(ctx: *common.Context, ud: u64) void {
         return;
     };
 
-    ctx.ring.prepareBroadcast(ctx, b, size) catch {};
+    ctx.prepareBroadcast(b, size);
+}
+
+fn scheduleStart(_: *common.Context, ud: u64) void {
+    const running: *bool = @ptrFromInt(ud);
+    running.* = true;
 }
 
 pub const TntRunModule = struct {
@@ -135,7 +138,7 @@ pub const TntRunModule = struct {
             .chunk_meta = &InitialMapMeta,
             .sky_light = true,
         }).encode(b.ptr);
-        ctx.ring.prepareOneshot(client.fd, b, size) catch {};
+        ctx.prepareOneshot(client.fd, b, size);
     }
 
     pub fn onChatMessage(
@@ -149,6 +152,7 @@ pub const TntRunModule = struct {
             try ctx.scheduler.schedule(&scheduleTimer, 20, 2);
             try ctx.scheduler.schedule(&scheduleTimer, 40, 1);
             try ctx.scheduler.schedule(&scheduleTimer, 60, 0);
+            try ctx.scheduler.schedule(&scheduleStart, 60, @intFromPtr(&self.running));
         } else if (std.mem.eql(u8, "stop", message)) {
             self.running = false;
         }
@@ -188,7 +192,7 @@ pub const TntRunModule = struct {
                 .position = .system,
             }).encode(b.ptr);
 
-            try ctx.ring.prepareBroadcast(ctx, b, size);
+            ctx.prepareBroadcast(b, size);
             return;
         }
 
