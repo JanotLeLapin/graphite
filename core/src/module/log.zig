@@ -16,7 +16,6 @@ pub fn formatAddr(buf: []u8, addr: *const std.posix.sockaddr) ![]u8 {
 }
 
 pub const LogModuleOptions = struct {
-    log_ping: bool = false,
     show_name: bool = true,
     show_ip: bool = true,
 };
@@ -48,22 +47,6 @@ pub fn LogModule(comptime opt: LogModuleOptions) type {
             return @This(){};
         }
         pub fn deinit(_: *@This()) void {}
-
-        pub fn onStatus(
-            _: *@This(),
-            _: *common.Context,
-            client: *common.client.Client,
-        ) !void {
-            if (!opt.log_ping) {
-                return;
-            }
-
-            try info("ping", "", .{
-                .log_ping = opt.log_ping,
-                .show_ip = opt.show_ip,
-                .show_name = false,
-            }, client, .{});
-        }
 
         pub fn onJoin(
             _: *@This(),
