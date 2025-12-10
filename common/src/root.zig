@@ -1,7 +1,5 @@
 const std = @import("std");
 
-const Modules = @import("root").Modules;
-
 pub const zcs = @import("zcs");
 
 pub const buffer = @import("buffer.zig");
@@ -12,37 +10,39 @@ pub const ecs = @import("ecs.zig");
 pub const scheduler = @import("scheduler.zig");
 pub const uring = @import("uring.zig");
 
-pub const ModuleRegistry = struct {
-    instances: std.meta.Tuple(&Modules),
+pub fn ModuleRegistry(comptime Modules: anytype) type {
+    return struct {
+        instances: std.meta.Tuple(&Modules),
 
-    pub fn init(alloc: std.mem.Allocator) !ModuleRegistry {
-        var self: ModuleRegistry = undefined;
+        pub fn init(alloc: std.mem.Allocator) !@This() {
+            var self: @This() = undefined;
 
-        inline for (Modules, 0..) |ModuleType, i| {
-            self.instances[i] = try ModuleType.init(alloc);
+            inline for (Modules, 0..) |ModuleType, i| {
+                self.instances[i] = try ModuleType.init(alloc);
+            }
+            return self;
         }
-        return self;
-    }
 
-    pub fn deinit(self: *ModuleRegistry) void {
-        inline for (Modules) |ModuleType| {
-            var instance = self.get(ModuleType);
-            instance.deinit();
+        pub fn deinit(self: *@This()) void {
+            inline for (Modules) |ModuleType| {
+                var instance = self.get(ModuleType);
+                instance.deinit();
+            }
         }
-    }
 
-    pub fn get(self: *ModuleRegistry, comptime T: type) *T {
-        const index = comptime findIndex(T);
-        return &self.instances[index];
-    }
-
-    pub fn findIndex(comptime T: type) usize {
-        inline for (Modules, 0..) |ModuleType, i| {
-            if (ModuleType == T) return i;
+        pub fn get(self: *@This(), comptime T: type) *T {
+            const index = comptime findIndex(T);
+            return &self.instances[index];
         }
-        @compileError("Unrecognized module " ++ @typeName(T));
-    }
-};
+
+        pub fn findIndex(comptime T: type) usize {
+            inline for (Modules, 0..) |ModuleType, i| {
+                if (ModuleType == T) return i;
+            }
+            @compileError("Unrecognized module " ++ @typeName(T));
+        }
+    };
+}
 
 pub const Uuid = struct {
     bytes: [16]u8,
@@ -80,7 +80,7 @@ pub const Context = struct {
     ring: *uring.Ring,
     buffer_pools: *buffer.BufferPools,
     scheduler: *scheduler.Scheduler,
-    module_registry: ModuleRegistry,
+    module_registry: *anyopaque,
 
     pub fn addClient(self: *Context, fd: i32) !*client.Client {
         var cb = try zcs.CmdBuf.init(.{ .name = null, .gpa = self.zcs_alloc, .es = self.entities });
@@ -104,5 +104,9 @@ pub const Context = struct {
         zcs.CmdBuf.Exec.immediate(self.entities, &cb);
 
         self.client_manager.remove(fd);
+    }
+
+    pub fn getModuleRegistry(self: *const Context, comptime T: type) *T {
+        return @ptrCast(@alignCast(self.module_registry));
     }
 };

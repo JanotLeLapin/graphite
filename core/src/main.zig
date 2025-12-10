@@ -16,13 +16,15 @@ pub const Modules = .{
     @import("module/log.zig").LogModule(.{}),
 };
 
+pub const ModuleRegistry = common.ModuleRegistry(Modules);
+
 fn dispatch(
     ctx: *common.Context,
     comptime method_name: []const u8,
     args: anytype,
 ) void {
     inline for (Modules) |ModuleType| {
-        const instance = ctx.module_registry.get(ModuleType);
+        const instance = ctx.getModuleRegistry(ModuleRegistry).get(ModuleType);
 
         if (@hasDecl(ModuleType, method_name)) {
             const method = @field(ModuleType, method_name);
@@ -308,7 +310,7 @@ pub fn main() !void {
 
     try scheduler.schedule(&keepaliveTask, 200, 0);
 
-    var module_registry = try common.ModuleRegistry.init(gpa.allocator());
+    var module_registry = try ModuleRegistry.init(gpa.allocator());
     defer module_registry.deinit();
 
     var ctx = common.Context{
@@ -318,7 +320,7 @@ pub fn main() !void {
         .ring = &ring,
         .buffer_pools = &buffer_pools,
         .scheduler = &scheduler,
-        .module_registry = module_registry,
+        .module_registry = &module_registry,
     };
 
     {
