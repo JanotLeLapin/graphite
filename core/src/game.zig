@@ -3,21 +3,9 @@ const log = std.log.scoped(.game);
 
 const SpscQueue = @import("spsc_queue").SpscQueue;
 
+const root = @import("root");
 const common = @import("graphite-common");
 const protocol = @import("graphite-protocol");
-
-const VanillaModule = @import("module/vanilla.zig").VanillaModule(.{
-    .send_join_message = true,
-    .send_quit_message = true,
-});
-const LogModule = @import("module/log.zig").LogModule(.{});
-
-pub const Modules = .{
-    VanillaModule,
-    LogModule,
-};
-
-pub const ModuleRegistry = common.ModuleRegistry(Modules);
 
 fn keepaliveTask(ctx: *common.Context, _: u64) void {
     ctx.scheduler.schedule(&keepaliveTask, 200, 0) catch {};
@@ -37,15 +25,15 @@ fn dispatch(
     comptime method_name: []const u8,
     args: anytype,
 ) void {
-    inline for (Modules) |ModuleType| {
-        const instance = ctx.getModuleRegistry(ModuleRegistry).get(ModuleType);
+    inline for (root.Modules) |ModuleType| {
+        const instance = ctx.getModuleRegistry(root.ModuleRegistry).get(ModuleType);
 
         if (@hasDecl(ModuleType, method_name)) {
             const method = @field(ModuleType, method_name);
             const call_args = .{
                 instance,
                 ctx,
-                ctx.getModuleRegistry(ModuleRegistry),
+                ctx.getModuleRegistry(root.ModuleRegistry),
             } ++ args;
             const result = @call(.auto, method, call_args);
 
@@ -87,7 +75,7 @@ pub fn main(efd: i32, rx: *SpscQueue(common.ServerMessage, true), tx: *SpscQueue
 
     try scheduler.schedule(&keepaliveTask, 200, 0);
 
-    var module_registry = try ModuleRegistry.init(gpa.allocator());
+    var module_registry = try root.ModuleRegistry.init(gpa.allocator());
     defer module_registry.deinit();
 
     var ctx = common.Context{
