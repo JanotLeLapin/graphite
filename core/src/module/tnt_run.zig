@@ -128,6 +128,7 @@ pub const TntRunModule = struct {
     pub fn onJoin(
         self: *@This(),
         ctx: *common.Context,
+        _: anytype,
         client: *common.client.Client,
     ) !void {
         const b = try ctx.buffer_pools.allocBuf(.@"18");
@@ -144,6 +145,7 @@ pub const TntRunModule = struct {
     pub fn onChatMessage(
         self: *@This(),
         ctx: *common.Context,
+        _: anytype,
         _: *common.client.Client,
         message: []const u8,
     ) !void {
@@ -161,6 +163,7 @@ pub const TntRunModule = struct {
     pub fn onMove(
         self: *@This(),
         ctx: *common.Context,
+        _: anytype,
         client: *common.client.Client,
     ) !void {
         if (!self.running) {

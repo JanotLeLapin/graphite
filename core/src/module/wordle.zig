@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const common = @import("../common/mod.zig");
-const packet = @import("../packet/mod.zig");
+const common = @import("graphite-common");
+const protocol = @import("graphite-protocol");
 
 const NoteTaskData = packed struct(u64) {
     client_fd: i32,
@@ -48,6 +48,7 @@ pub const WordleModule = struct {
     pub fn onChatMessage(
         self: *WordleModule,
         ctx: *common.Context,
+        _: anytype,
         client: *common.client.Client,
         message: []const u8,
     ) !void {
@@ -76,12 +77,11 @@ pub const WordleModule = struct {
             }
         }
 
-        const b = try ctx.buffer_pool.allocBuf();
-        errdefer ctx.buffer_pool.releaseBuf(b.idx);
+        const b = try ctx.buffer_pools.allocBuf(.@"10");
 
         var buf: [256]u8 = undefined;
 
-        var offset = packet.ClientPlayChatMessage.encode(&.{
+        var offset = try protocol.ClientPlayChatMessage.encode(&.{
             .json = try std.fmt.bufPrint(
                 &buf,
                 "{f}",
@@ -97,14 +97,14 @@ pub const WordleModule = struct {
                 }},
             ),
             .position = .system,
-        }, &b.data) orelse return WordleModuleError.EncodingFailure;
+        }, b.ptr);
 
         if (std.mem.eql(CharStatus, &statuses, &.{ .spot_on, .spot_on, .spot_on, .spot_on, .spot_on })) {
             try self.winners.append(self.alloc, client.fd);
-            offset += packet.ClientPlayChatMessage.encode(&.{
+            offset += try protocol.ClientPlayChatMessage.encode(&.{
                 .json = try std.fmt.bufPrint(&buf, "{f}", .{common.chat.Chat{ .text = "good guess!", .color = .green }}),
                 .position = .system,
-            }, b.data[offset..]) orelse return WordleModuleError.EncodingFailure;
+            }, b.ptr[offset..]);
 
             try ctx.scheduler.schedule(&playNoteTask, 1, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 48 }));
             try ctx.scheduler.schedule(&playNoteTask, 6, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 52 }));
@@ -112,7 +112,7 @@ pub const WordleModule = struct {
             try ctx.scheduler.schedule(&playNoteTask, 11, @bitCast(NoteTaskData{ .client_fd = client.fd, .midi = 59 }));
         }
 
-        try b.prepareOneshot(ctx.ring, client.fd, offset);
+        ctx.prepareOneshot(client.fd, b, offset);
     }
 };
 
@@ -121,10 +121,10 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
 
     _ = ctx.client_manager.get(noteData.client_fd) orelse return;
 
-    const b = ctx.buffer_pool.allocBuf() catch return;
+    const b = ctx.buffer_pools.allocBuf(.@"6") catch return;
 
     const pitch = common.pitchFromMidi(noteData.midi);
-    const size = packet.ClientPlaySoundEffect.encode(
+    const size = protocol.ClientPlaySoundEffect.encode(
         &.{
             .sound_name = "note.harp",
             .x = 0,
@@ -133,11 +133,11 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
             .volume = 10.0,
             .pitch = pitch,
         },
-        &b.data,
-    ).?;
-
-    b.prepareOneshot(ctx.ring, noteData.client_fd, size) catch {
-        ctx.buffer_pool.releaseBuf(b.idx);
+        b.ptr,
+    ) catch {
+        ctx.buffer_pools.releaseBuf(b.idx);
         return;
     };
+
+    ctx.prepareOneshot(noteData.client_fd, b, size);
 }
