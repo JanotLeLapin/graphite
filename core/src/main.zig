@@ -3,15 +3,16 @@ const std = @import("std");
 const SpscQueue = @import("spsc_queue").SpscQueue;
 
 const common = @import("graphite-common");
+const examples = @import("graphite-examples");
 const game = @import("game.zig");
 const server = @import("server.zig");
 const uring = @import("uring.zig");
 
-const VanillaModule = @import("module/vanilla.zig").VanillaModule(.{
+const VanillaModule = examples.vanilla.VanillaModule(.{
     .send_join_message = true,
     .send_quit_message = true,
 });
-const LogModule = @import("module/log.zig").LogModule(.{});
+const LogModule = examples.log.LogModule(.{});
 
 pub const Modules = .{
     VanillaModule,

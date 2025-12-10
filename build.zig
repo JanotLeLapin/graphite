@@ -46,6 +46,16 @@ pub fn build(b: *std.Build) void {
     });
     protocol_mod.addImport("graphite-common", common_mod);
 
+    const examples_mod = b.addModule("graphite-examples", .{
+        .root_source_file = b.path("examples/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "graphite-common", .module = common_mod },
+            .{ .name = "graphite-protocol", .module = protocol_mod },
+        },
+    });
+
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
     // to the module defined above, it's sometimes preferable to split business
@@ -85,6 +95,7 @@ pub fn build(b: *std.Build) void {
                 // importing modules from different packages).
                 .{ .name = "graphite-common", .module = common_mod },
                 .{ .name = "graphite-protocol", .module = protocol_mod },
+                .{ .name = "graphite-examples", .module = examples_mod },
 
                 .{ .name = "spsc_queue", .module = spsc_queue_dep.module("spsc_queue") },
             },
