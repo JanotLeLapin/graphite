@@ -108,6 +108,9 @@ pub fn main(efd: i32, rx: *SpscQueue(common.ServerMessage, true), tx: *SpscQueue
                         ctx.buffer_pools.releaseBuf(idx);
                     }
                 },
+                .write_error => |idx| {
+                    ctx.buffer_pools.releaseBuf(idx);
+                },
                 .status_request => |fd| {
                     dispatch(&ctx, "onStatus", .{fd});
                 },

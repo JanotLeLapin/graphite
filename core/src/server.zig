@@ -271,14 +271,10 @@ pub fn main(efd: i32, rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(c
                     while (rx.front()) |msg| {
                         switch (msg.*) {
                             .prepare_oneshot => |d| {
-                                ring.prepareOneshot(d.fd, d.b, d.size) catch {
-                                    log.warn("memory leak!", .{});
-                                };
+                                ring.prepareOneshot(d.fd, d.b, d.size) catch tx.push(.{ .write_error = d.b.idx });
                             },
                             .prepare_broadcast => |d| {
-                                ring.prepareBroadcast(&ctx, d.b, d.size) catch {
-                                    log.warn("memory leak!", .{});
-                                };
+                                ring.prepareBroadcast(&ctx, d.b, d.size) catch tx.push(.{ .write_error = d.b.idx });
                             },
                         }
                         rx.pop();

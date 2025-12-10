@@ -13,6 +13,8 @@ pub const scheduler = @import("scheduler.zig");
 pub const ServerMessage = union(enum) {
     tick,
     write_result: buffer.BufferIndex,
+    write_error: buffer.BufferIndex,
+
     status_request: i32,
     status_ping: struct {
         fd: i32,
