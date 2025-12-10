@@ -81,4 +81,28 @@ pub const Context = struct {
     buffer_pools: *buffer.BufferPools,
     scheduler: *scheduler.Scheduler,
     module_registry: ModuleRegistry,
+
+    pub fn addClient(self: *Context, fd: i32) !*client.Client {
+        var cb = try zcs.CmdBuf.init(.{ .name = null, .gpa = self.zcs_alloc, .es = self.entities });
+        defer cb.deinit(self.zcs_alloc, self.entities);
+
+        const e = zcs.Entity.reserve(&cb);
+        _ = e.add(&cb, ecs.Client, .{ .fd = fd });
+
+        zcs.CmdBuf.Exec.immediate(self.entities, &cb);
+        return self.client_manager.add(fd, e);
+    }
+
+    pub fn removeClient(self: *Context, fd: i32) !void {
+        const c = self.client_manager.get(fd) orelse return;
+
+        var cb = try zcs.CmdBuf.init(.{ .name = null, .gpa = self.zcs_alloc, .es = self.entities });
+        defer cb.deinit(self.zcs_alloc, self.entities);
+
+        c.e.destroy(&cb);
+
+        zcs.CmdBuf.Exec.immediate(self.entities, &cb);
+
+        self.client_manager.remove(fd);
+    }
 };

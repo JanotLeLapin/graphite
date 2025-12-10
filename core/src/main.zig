@@ -357,15 +357,7 @@ pub fn main() !void {
                         const cfd = cqe.res;
                         std.log.debug("client: {d} connected", .{cfd});
 
-                        var cb = try common.zcs.CmdBuf.init(.{ .name = null, .gpa = zcs_alloc, .es = &entities });
-                        defer cb.deinit(zcs_alloc, &entities);
-
-                        const e = common.zcs.Entity.reserve(&cb);
-                        _ = e.add(&cb, common.ecs.Client, .{ .fd = cfd });
-
-                        common.zcs.CmdBuf.Exec.immediate(&entities, &cb);
-
-                        var client = try client_manager.add(cfd, e);
+                        var client = try ctx.addClient(cfd);
                         client.state = .handshake;
                         client.addr = addr;
 
@@ -388,7 +380,7 @@ pub fn main() !void {
                         const errcode: usize = @intCast(-cqe.res);
                         const err = std.posix.errno(errcode);
                         std.log.err("cqe error: read: {s}", .{@tagName(err)});
-                        client_manager.remove(cfd);
+                        try ctx.removeClient(cfd);
                     } else {
                         if (client_manager.get(cfd)) |client| {
                             const bytes: usize = @intCast(cqe.res);
@@ -396,7 +388,7 @@ pub fn main() !void {
                                 if (client.state == .play) {
                                     dispatch(&ctx, "onQuit", .{client});
                                 }
-                                client_manager.remove(cfd);
+                                try ctx.removeClient(cfd);
                                 std.log.debug("client: {d} disconnected", .{cfd});
                             } else {
                                 client.read_buf_tail += bytes;
@@ -414,7 +406,7 @@ pub fn main() !void {
                         const errcode: usize = @intCast(-cqe.res);
                         const err = std.posix.errno(errcode);
                         std.log.err("cqe error: write: {s}", .{@tagName(err)});
-                        client_manager.remove(cfd);
+                        try ctx.removeClient(cfd);
                     } else {
                         const idx: common.buffer.BufferIndex = @bitCast(ud.d);
                         const b = ctx.buffer_pools.get(idx);
