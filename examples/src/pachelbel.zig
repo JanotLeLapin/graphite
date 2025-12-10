@@ -128,16 +128,17 @@ const Schedules = [_]u8{
 fn playNoteTask(ctx: *common.Context, userdata: u64) void {
     const noteData: NoteTaskData = @bitCast(userdata);
 
-    _ = ctx.client_manager.get(noteData.client_fd) orelse return;
+    const client = ctx.client_manager.get(noteData.client_fd) orelse return;
+    const l = client.e.get(ctx.entities, common.ecs.Location) orelse return;
 
     const b = ctx.buffer_pools.allocBuf(.@"10") catch return;
     const size = protocol.ClientPlaySoundEffect.encode(
         &.{
             .sound_name = noteData.instrument.getName(),
-            .x = 0,
-            .y = 0,
-            .z = 0,
-            .volume = 10.0,
+            .x = @intFromFloat(l.x * 8),
+            .y = @intFromFloat(l.y * 8),
+            .z = @intFromFloat(l.z * 8),
+            .volume = 1.0,
             .pitch = common.pitchFromMidi(noteData.midi),
         },
         b.ptr,
