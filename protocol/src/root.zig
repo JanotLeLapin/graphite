@@ -62,6 +62,18 @@ pub fn decodeValue(comptime T: anytype, buf: []const u8) !struct { value: T, len
         .bool => {
             return .{ .value = buf[0] > 0, .len = 1 };
         },
+        .@"enum" => {
+            const TagType = @typeInfo(T).@"enum".tag_type;
+            const size = @sizeOf(TagType);
+            if (buf.len < size) {
+                return EncodingError.OutOfBounds;
+            }
+
+            return .{
+                .value = @enumFromInt(std.mem.readInt(TagType, buf[0..size], .big)),
+                .len = size,
+            };
+        },
         .pointer => |p| {
             if (p.size != .slice or !p.is_const or p.child != u8) {
                 @compileError("invalid type: " ++ @typeName(T));
