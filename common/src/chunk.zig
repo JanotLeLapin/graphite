@@ -9,6 +9,10 @@ pub const BlockType = enum(u16) {
     stone = 1,
     grass = 2,
     dirt = 3,
+    cobblestone = 4,
+    wood_plank = 5,
+    sapling = 6,
+    bedrock = 7,
     wool = 35,
 
     pub fn getBlockData(self: BlockType) u16 {
@@ -18,6 +22,31 @@ pub const BlockType = enum(u16) {
     pub fn getBlockDataMeta(self: BlockType, meta: anytype) u16 {
         return (@as(u16, @intFromEnum(self)) << 4) | (@as(u4, @intFromEnum(meta)) & 0x0F);
     }
+};
+
+pub const StoneType = enum(u4) {
+    stone = 0,
+    granite = 1,
+    polished_granite = 2,
+    diorite = 3,
+    polished_diorite = 4,
+    andesite = 5,
+    polished_andesite = 6,
+};
+
+pub const DirtType = enum(u4) {
+    dirt = 0,
+    coarse_dirt = 1,
+    podzol = 2,
+};
+
+pub const WoodType = enum(u4) {
+    oak = 0,
+    spruce = 1,
+    birch = 2,
+    jungle = 3,
+    acacia = 4,
+    dark_oak = 5,
 };
 
 pub const WoolColor = enum(u4) {
