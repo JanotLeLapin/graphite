@@ -4,15 +4,24 @@ pub const Location = struct {
     z: i32,
 };
 
-pub const BlockType = enum(u8) {
+pub const BlockType = enum(u16) {
     air = 0,
     stone = 1,
     grass = 2,
     dirt = 3,
     wool = 35,
+
+    pub fn getBlockData(self: BlockType) u16 {
+        return @as(u16, @intFromEnum(self)) << 4;
+    }
+
+    pub fn getBlockDataMeta(self: BlockType, meta: anytype) u16 {
+        return (@as(u16, @intFromEnum(self)) << 4) | (@as(u4, @intFromEnum(meta)) & 0x0F);
+    }
 };
 
 pub const WoolColor = enum(u4) {
+    white = 0,
     orange = 1,
     magenta = 2,
     light_blue = 3,
@@ -35,11 +44,6 @@ pub const BiomeType = enum(u8) {
     plains = 1,
     desert = 2,
 };
-
-pub fn BlockData(t: BlockType, m: u4) u16 {
-    const tn: u16 = @intFromEnum(t);
-    return (tn << 4) | (m & 0x0F);
-}
 
 pub const ChunkSection = struct {
     blocks: [4096]u16,

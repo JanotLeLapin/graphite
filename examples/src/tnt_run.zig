@@ -20,9 +20,10 @@ const InitialMap: [4]common.chunk.Chunk = blk: {
                     const abs_x = x + 16 * cx;
                     const abs_z = z + 16 * cz;
 
-                    const meta = if ((abs_x + abs_z) % 2 == 0) 0 else 15;
+                    const meta: common.chunk.WoolColor =
+                        if ((abs_x + abs_z) % 2 == 0) .white else .black;
 
-                    chunks[ci].sections[3].blocks[i] = common.chunk.BlockData(.wool, meta);
+                    chunks[ci].sections[3].blocks[i] = common.chunk.BlockType.wool.getBlockDataMeta(meta);
                     chunks[ci].sections[3].block_light[i] = 15;
                     chunks[ci].sections[3].sky_light[i] = 15;
                 }
