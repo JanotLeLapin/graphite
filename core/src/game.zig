@@ -106,17 +106,41 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
                 .write_error => |idx| {
                     ctx.buffer_pools.releaseBuf(idx);
                 },
-                .status_request => |fd| {
-                    dispatch(&ctx, "onStatus", .{fd});
-                },
-                .status_ping => |d| {
-                    const b = try ctx.buffer_pools.allocBuf(.@"6");
+                .packet => |p| if (client_manager.get(p.fd)) |c| {
+                    switch (p.d) {
+                        .status_request => {
+                            dispatch(&ctx, "onStatus", .{p.fd});
+                        },
+                        .status_ping => |d| {
+                            const b = try ctx.buffer_pools.allocBuf(.@"6");
 
-                    b.ptr[0] = 9;
-                    b.ptr[1] = 0x01;
-                    @memcpy(b.ptr[2..10], @as([]const u8, @ptrCast(&d.payload)));
+                            b.ptr[0] = 9;
+                            b.ptr[1] = 0x01;
+                            @memcpy(b.ptr[2..10], @as([]const u8, @ptrCast(&d.payload)));
 
-                    ctx.prepareOneshot(d.fd, b, 10);
+                            ctx.prepareOneshot(p.fd, b, 10);
+                        },
+                        .play_player_position => |d| {
+                            const l = c.e.get(&entities, common.ecs.Location).?;
+                            l.x = d.x;
+                            l.y = d.y;
+                            l.z = d.z;
+                            l.on_ground = d.on_ground;
+                            dispatch(&ctx, "onMove", .{c});
+                        },
+                        .play_player_position_and_look => |d| {
+                            const l = c.e.get(&entities, common.ecs.Location).?;
+                            l.x = d.x;
+                            l.y = d.y;
+                            l.z = d.z;
+                            l.on_ground = d.on_ground;
+                            dispatch(&ctx, "onMove", .{c});
+                        },
+                        .play_player_digging => |d| {
+                            dispatch(&ctx, "onDig", .{ c, d.location.value, d.status });
+                        },
+                        else => {},
+                    }
                 },
                 .player_join => |d| {
                     log.debug("player {d} joined", .{d.fd});
@@ -179,18 +203,6 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
                     ctx.prepareOneshot(c.fd, b, offset);
 
                     dispatch(&ctx, "onJoin", .{c});
-                },
-                .player_move => |l| if (client_manager.get(l.fd)) |c| {
-                    const lc = c.e.get(&entities, common.ecs.Location).?;
-                    lc.x = l.d.x;
-                    lc.y = l.d.y;
-                    lc.z = l.d.z;
-                    lc.on_ground = l.d.on_ground;
-
-                    dispatch(&ctx, "onMove", .{c});
-                },
-                .player_digging => |d| if (client_manager.get(d.fd)) |c| {
-                    dispatch(&ctx, "onDig", .{ c, d.location, d.status });
                 },
                 .player_chat => |d| if (client_manager.get(d.fd)) |c| {
                     dispatch(&ctx, "onChatMessage", .{ c, d.message[0..d.message_len] });

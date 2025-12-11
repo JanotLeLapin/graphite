@@ -39,15 +39,6 @@ fn processPacket(
 ) !void {
     switch (p) {
         .handshake => client.state = @enumFromInt(p.handshake.next_state),
-        .status_request => {
-            ctx.tx.push(.{ .status_request = client.fd });
-        },
-        .status_ping => {
-            ctx.tx.push(.{ .status_ping = .{
-                .fd = client.fd,
-                .payload = p.status_ping.payload,
-            } });
-        },
         .login_start => {
             var msg = root.ServerMessage{ .player_join = .{
                 .fd = client.fd,
@@ -79,36 +70,11 @@ fn processPacket(
             @memcpy(msg.player_chat.message[0..len], pd.message[0..len]);
             ctx.tx.push(msg);
         },
-        .play_player_position => |pd| {
-            ctx.tx.push(.{ .player_move = .{
-                .fd = client.fd,
-                .d = .{
-                    .x = pd.x,
-                    .y = pd.y,
-                    .z = pd.z,
-                    .on_ground = pd.on_ground,
-                },
-            } });
         },
-        .play_player_position_and_look => |pd| {
-            ctx.tx.push(.{ .player_move = .{
-                .fd = client.fd,
-                .d = .{
-                    .x = pd.x,
-                    .y = pd.y,
-                    .z = pd.z,
-                    .on_ground = pd.on_ground,
-                },
-            } });
-        },
-        .play_player_digging => |pd| {
-            ctx.tx.push(.{ .player_digging = .{
-                .fd = client.fd,
-                .status = pd.status,
-                .location = pd.location.value,
-            } });
-        },
-        else => {},
+        else => ctx.tx.push(.{ .packet = .{
+            .fd = client.fd,
+            .d = p,
+        } }),
     }
 }
 

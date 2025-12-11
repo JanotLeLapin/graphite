@@ -4,6 +4,7 @@ const SpscQueue = @import("spsc_queue").SpscQueue;
 
 const common = @import("graphite-common");
 const examples = @import("graphite-examples");
+const protocol = @import("graphite-protocol");
 const game = @import("game.zig");
 const server = @import("server.zig");
 const uring = @import("uring.zig");
@@ -26,10 +27,9 @@ pub const ServerMessage = union(enum) {
     write_result: common.buffer.BufferIndex,
     write_error: common.buffer.BufferIndex,
 
-    status_request: i32,
-    status_ping: struct {
+    packet: struct {
         fd: i32,
-        payload: u64,
+        d: protocol.ServerBoundPacket,
     },
     player_join: struct {
         fd: i32,
@@ -37,15 +37,6 @@ pub const ServerMessage = union(enum) {
         username_len: usize,
         addr: std.os.linux.sockaddr,
         location: common.ecs.Location,
-    },
-    player_move: struct {
-        fd: i32,
-        d: common.ecs.Location,
-    },
-    player_digging: struct {
-        fd: i32,
-        status: u8,
-        location: common.chunk.Location,
     },
     player_chat: struct {
         fd: i32,
