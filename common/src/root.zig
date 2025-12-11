@@ -10,36 +10,6 @@ pub const client = @import("client.zig");
 pub const ecs = @import("ecs.zig");
 pub const scheduler = @import("scheduler.zig");
 
-pub const ServerMessage = union(enum) {
-    tick,
-    write_result: buffer.BufferIndex,
-    write_error: buffer.BufferIndex,
-
-    status_request: i32,
-    status_ping: struct {
-        fd: i32,
-        payload: u64,
-    },
-    player_join: struct {
-        fd: i32,
-        username: [64]u8,
-        username_len: usize,
-        addr: std.os.linux.sockaddr,
-        location: ecs.Location,
-    },
-    player_move: struct {
-        fd: i32,
-        d: ecs.Location,
-    },
-    player_chat: struct {
-        fd: i32,
-        message: [128]u8,
-        message_len: usize,
-    },
-    player_quit: i32,
-    stop,
-};
-
 pub const GameMessage = union(enum) {
     prepare_oneshot: struct {
         fd: i32,

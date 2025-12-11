@@ -21,6 +21,36 @@ pub const Modules = .{
 
 pub const ModuleRegistry = common.ModuleRegistry(Modules);
 
+pub const ServerMessage = union(enum) {
+    tick,
+    write_result: common.buffer.BufferIndex,
+    write_error: common.buffer.BufferIndex,
+
+    status_request: i32,
+    status_ping: struct {
+        fd: i32,
+        payload: u64,
+    },
+    player_join: struct {
+        fd: i32,
+        username: [64]u8,
+        username_len: usize,
+        addr: std.os.linux.sockaddr,
+        location: common.ecs.Location,
+    },
+    player_move: struct {
+        fd: i32,
+        d: common.ecs.Location,
+    },
+    player_chat: struct {
+        fd: i32,
+        message: [128]u8,
+        message_len: usize,
+    },
+    player_quit: i32,
+    stop,
+};
+
 pub fn log(
     comptime message_level: std.log.Level,
     comptime scope: @Type(.enum_literal),
@@ -64,7 +94,7 @@ pub fn main() !void {
     var server_queue = try SpscQueue(common.GameMessage, true).initCapacity(std.heap.page_allocator, 64);
     defer server_queue.deinit();
 
-    var game_queue = try SpscQueue(common.ServerMessage, true).initCapacity(std.heap.page_allocator, 64);
+    var game_queue = try SpscQueue(ServerMessage, true).initCapacity(std.heap.page_allocator, 64);
     defer game_queue.deinit();
 
     const server_thread = try std.Thread.spawn(.{}, server.main, .{ efd, &server_queue, &game_queue });

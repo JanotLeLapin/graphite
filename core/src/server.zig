@@ -25,7 +25,7 @@ pub const Client = struct {
 pub const Context = struct {
     ring: *uring.Ring,
     client_manager: *common.client.ClientManager(Client),
-    tx: *SpscQueue(common.ServerMessage, true),
+    tx: *SpscQueue(root.ServerMessage, true),
 };
 
 const PacketProcessingError = error{
@@ -49,7 +49,7 @@ fn processPacket(
             } });
         },
         .login_start => {
-            var msg = common.ServerMessage{ .player_join = .{
+            var msg = root.ServerMessage{ .player_join = .{
                 .fd = client.fd,
                 .username = undefined,
                 .username_len = 0,
@@ -70,7 +70,7 @@ fn processPacket(
         },
         .play_chat_message => |pd| {
             const len = @min(pd.message.len, 128);
-            var msg = common.ServerMessage{ .player_chat = .{
+            var msg = root.ServerMessage{ .player_chat = .{
                 .fd = client.fd,
                 .message_len = len,
                 .message = undefined,
@@ -173,7 +173,7 @@ fn createServer() !i32 {
     return server_fd;
 }
 
-pub fn main(efd: i32, rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(common.ServerMessage, true)) !void {
+pub fn main(efd: i32, rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(root.ServerMessage, true)) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
