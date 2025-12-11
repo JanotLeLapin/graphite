@@ -150,6 +150,21 @@ pub const TntRunModule = struct {
         message: []const u8,
     ) !void {
         if (std.mem.eql(u8, "start", message)) {
+            const b = try ctx.buffer_pools.allocBuf(.@"10");
+            var offset = (protocol.ClientPlayPlayerPositionAndLook{
+                .x = 0.0,
+                .y = 67.0,
+                .z = 0.0,
+                .flags = 0,
+                .pitch = 0,
+                .yaw = 0,
+            }).encode(b.ptr) catch return;
+            offset += (protocol.ClientPlayChangeGameState{
+                .change_game_mode = .survival,
+            }).encode(b.ptr[offset..]) catch return;
+
+            ctx.prepareBroadcast(b, offset);
+
             try ctx.scheduler.schedule(&scheduleTimer, 0, 3);
             try ctx.scheduler.schedule(&scheduleTimer, 20, 2);
             try ctx.scheduler.schedule(&scheduleTimer, 40, 1);
@@ -179,7 +194,7 @@ pub const TntRunModule = struct {
             const b = try ctx.buffer_pools.allocBuf(.@"10");
             errdefer ctx.buffer_pools.releaseBuf(b.idx);
 
-            const size = try (protocol.ClientPlayChatMessage{
+            var offset = try (protocol.ClientPlayChatMessage{
                 .json = try std.fmt.bufPrint(
                     buf[0..],
                     "{f}",
@@ -194,8 +209,11 @@ pub const TntRunModule = struct {
                 ),
                 .position = .system,
             }).encode(b.ptr);
+            offset += try (protocol.ClientPlayChangeGameState{
+                .change_game_mode = .spectator,
+            }).encode(b.ptr[offset..]);
 
-            ctx.prepareBroadcast(b, size);
+            ctx.prepareBroadcast(b, offset);
             return;
         }
 
