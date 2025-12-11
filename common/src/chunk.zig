@@ -6,13 +6,13 @@ pub const Location = struct {
 
 pub const BlockType = enum(u16) {
     air = 0,
-    stone = 1,
-    grass = 2,
-    dirt = 3,
-    cobblestone = 4,
-    wood_plank = 5,
-    sapling = 6,
-    bedrock = 7,
+    stone,
+    grass,
+    dirt,
+    cobblestone,
+    wood_plank,
+    sapling,
+    bedrock,
     wool = 35,
 
     pub fn getBlockData(self: BlockType) u16 {
@@ -26,52 +26,52 @@ pub const BlockType = enum(u16) {
 
 pub const StoneType = enum(u4) {
     stone = 0,
-    granite = 1,
-    polished_granite = 2,
-    diorite = 3,
-    polished_diorite = 4,
-    andesite = 5,
-    polished_andesite = 6,
+    granite,
+    polished_granite,
+    diorite,
+    polished_diorite,
+    andesite,
+    polished_andesite,
 };
 
 pub const DirtType = enum(u4) {
     dirt = 0,
-    coarse_dirt = 1,
-    podzol = 2,
+    coarse_dirt,
+    podzol,
 };
 
 pub const WoodType = enum(u4) {
     oak = 0,
-    spruce = 1,
-    birch = 2,
-    jungle = 3,
-    acacia = 4,
-    dark_oak = 5,
+    spruce,
+    birch,
+    jungle,
+    acacia,
+    dark_oak,
 };
 
 pub const WoolColor = enum(u4) {
     white = 0,
-    orange = 1,
-    magenta = 2,
-    light_blue = 3,
-    yellow = 4,
-    lime = 5,
-    pink = 6,
-    gray = 7,
-    light_gray = 8,
-    cyan = 9,
-    purple = 10,
-    blue = 11,
-    brown = 12,
-    green = 13,
-    red = 14,
-    black = 15,
+    orange,
+    magenta,
+    light_blue,
+    yellow,
+    lime,
+    pink,
+    gray,
+    light_gray,
+    cyan,
+    purple,
+    blue,
+    brown,
+    green,
+    red,
+    black,
 };
 
 pub const BiomeType = enum(u8) {
     the_void = 0,
-    plains = 1,
-    desert = 2,
+    plains,
+    desert,
 };
 
 pub const ChunkSection = struct {
