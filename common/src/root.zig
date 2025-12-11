@@ -9,6 +9,7 @@ pub const chunk = @import("chunk.zig");
 pub const client = @import("client.zig");
 pub const ecs = @import("ecs.zig");
 pub const scheduler = @import("scheduler.zig");
+pub const slot = @import("slot.zig");
 
 pub const GameMessage = union(enum) {
     prepare_oneshot: struct {

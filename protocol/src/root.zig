@@ -684,6 +684,17 @@ pub const ClientPlayChangeGameState = union(enum) {
     }
 };
 
+pub const ClientPlaySetSlot = struct {
+    // 0 for player inventory
+    window_id: u8,
+    slot_index: u16,
+    slot_data: types.Slot,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        return genEncodeBasic(@This(), 0x2F)(self, buf);
+    }
+};
+
 /// Sent by the server before it disconnects a client.
 /// The client assumes that the server has already closed the connection by the time the packet arrives.
 pub const ClientPlayDisconnect = struct {

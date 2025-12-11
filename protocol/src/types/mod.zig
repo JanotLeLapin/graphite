@@ -5,3 +5,4 @@ pub const VarLong = Varlen(i64, 10);
 pub const String = @import("string.zig").String;
 
 pub const Location = @import("location.zig").Location;
+pub const Slot = @import("slot.zig").Slot;
