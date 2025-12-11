@@ -725,6 +725,59 @@ pub const ClientPlaySetSlot = struct {
     }
 };
 
+pub const ClientPlayPlayerListItem = union(enum) {
+    add_player: []const struct {
+        uuid: common.Uuid,
+        name: []const u8,
+        // TODO: properties
+        gamemode: u8,
+        ping: i32,
+        display_name: ?[]const u8,
+    },
+    update_gamemode,
+    update_latency,
+    update_display_name,
+    remove_player,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        var offset: usize = 5;
+        offset += types.VarInt.encode(0x38, buf[offset..]) catch return EncodingError.OutOfBounds;
+
+        switch (self.*) {
+            .add_player => |a| {
+                buf[offset] = 0;
+                offset += 1;
+
+                offset += types.VarInt.encode(@intCast(a.len), buf[offset..]) catch return EncodingError.OutOfBounds;
+                for (a) |p| {
+                    @memcpy(buf[offset .. offset + 16], &p.uuid.bytes);
+                    offset += 16;
+                    offset += try encodeValue([]const u8, p.name, buf[offset..]);
+                    buf[offset] = 0;
+                    offset += 1;
+                    offset += types.VarInt.encode(@intCast(p.gamemode), buf[offset..]) catch return EncodingError.OutOfBounds;
+                    offset += types.VarInt.encode(@intCast(p.ping), buf[offset..]) catch return EncodingError.OutOfBounds;
+
+                    if (p.display_name) |display| {
+                        buf[offset] = 1;
+                        offset += 1;
+                        offset += try encodeValue([]const u8, display, buf[offset..]);
+                    } else {
+                        buf[offset] = 0;
+                        offset += 1;
+                    }
+                }
+            },
+            else => {},
+        }
+
+        const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;
+        @memmove(buf[size .. size + offset], buf[5 .. 5 + offset]);
+
+        return size + offset - 5;
+    }
+};
+
 /// Sent by the server before it disconnects a client.
 /// The client assumes that the server has already closed the connection by the time the packet arrives.
 pub const ClientPlayDisconnect = struct {
