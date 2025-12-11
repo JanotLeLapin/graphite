@@ -25,7 +25,7 @@ pub const Slot = struct {
 
         return DecodedType{
             .value = .{
-                .block_id = @enumFromInt(id),
+                .block_id = id,
                 .item_count = buf[2],
                 .item_damage = std.mem.readInt(u8, buf[3..5], .big),
             },
@@ -34,8 +34,8 @@ pub const Slot = struct {
     }
 
     pub fn encode(value: common.slot.SlotData, buf: []u8) !usize {
-        std.mem.writeInt(i16, buf[0..2], @intFromEnum(value.block_id), .big);
-        if (@intFromEnum(value.block_id) == -1) {
+        std.mem.writeInt(i16, buf[0..2], value.block_id, .big);
+        if (value.block_id == -1) {
             return 2;
         }
 
