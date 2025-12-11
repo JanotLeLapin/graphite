@@ -627,6 +627,63 @@ pub const ClientPlaySoundEffect = struct {
     }
 };
 
+pub const ClientPlayChangeGameState = union(enum) {
+    invalid_bed: void,
+    end_raining: void,
+    begin_raining: void,
+    change_game_mode: GamemodeType,
+    enter_credits: void,
+    demo_message: enum {
+        welcome,
+        movement_controls,
+        jump_control,
+        inventory_control,
+    },
+    arrow_hitting_player: void,
+    fade_value: f32,
+    fade_time: f32,
+    mob_appearance: void,
+
+    const RVCouple = struct {
+        r: u8,
+        v: f32 = 0.0,
+    };
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        var offset: usize = 5;
+        offset += types.VarInt.encode(0x2B, buf[offset..]) catch return EncodingError.OutOfBounds;
+
+        const rv: RVCouple = switch (self.*) {
+            .invalid_bed => .{ .r = 0 },
+            .end_raining => .{ .r = 1 },
+            .begin_raining => .{ .r = 2 },
+            .change_game_mode => |g| .{ .r = 3, .v = @floatFromInt(@intFromEnum(g)) },
+            .enter_credits => .{ .r = 4 },
+            .demo_message => |d| .{
+                .r = 5,
+                .v = switch (d) {
+                    .welcome => 0.0,
+                    .movement_controls => 101.0,
+                    .jump_control => 102.0,
+                    .inventory_control => 103.0,
+                },
+            },
+            .arrow_hitting_player => .{ .r = 6 },
+            .fade_value => |v| .{ .r = 7, .v = v },
+            .fade_time => |v| .{ .r = 8, .v = v },
+            .mob_appearance => .{ .r = 10 },
+        };
+
+        offset += try encodeValue(u8, rv.r, buf[offset..]);
+        offset += try encodeValue(f32, rv.v, buf[offset..]);
+
+        const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;
+        @memmove(buf[size .. size + offset], buf[5 .. 5 + offset]);
+
+        return size + offset - 5;
+    }
+};
+
 /// Sent by the server before it disconnects a client.
 /// The client assumes that the server has already closed the connection by the time the packet arrives.
 pub const ClientPlayDisconnect = struct {
