@@ -106,7 +106,7 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
                 .write_error => |idx| {
                     ctx.buffer_pools.releaseBuf(idx);
                 },
-                .packet => |p| if (client_manager.get(p.fd)) |c| {
+                .packet => |p| {
                     switch (p.d) {
                         .status_request => {
                             dispatch(&ctx, "onStatus", .{p.fd});
@@ -120,26 +120,30 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
 
                             ctx.prepareOneshot(p.fd, b, 10);
                         },
-                        .play_player_position => |d| {
-                            const l = c.e.get(&entities, common.ecs.Location).?;
-                            l.x = d.x;
-                            l.y = d.y;
-                            l.z = d.z;
-                            l.on_ground = d.on_ground;
-                            dispatch(&ctx, "onMove", .{c});
+                        else => if (client_manager.get(p.fd)) |c| {
+                            switch (p.d) {
+                                .play_player_position => |d| {
+                                    const l = c.e.get(&entities, common.ecs.Location).?;
+                                    l.x = d.x;
+                                    l.y = d.y;
+                                    l.z = d.z;
+                                    l.on_ground = d.on_ground;
+                                    dispatch(&ctx, "onMove", .{c});
+                                },
+                                .play_player_position_and_look => |d| {
+                                    const l = c.e.get(&entities, common.ecs.Location).?;
+                                    l.x = d.x;
+                                    l.y = d.y;
+                                    l.z = d.z;
+                                    l.on_ground = d.on_ground;
+                                    dispatch(&ctx, "onMove", .{c});
+                                },
+                                .play_player_digging => |d| {
+                                    dispatch(&ctx, "onDig", .{ c, d.location.value, d.status });
+                                },
+                                else => {},
+                            }
                         },
-                        .play_player_position_and_look => |d| {
-                            const l = c.e.get(&entities, common.ecs.Location).?;
-                            l.x = d.x;
-                            l.y = d.y;
-                            l.z = d.z;
-                            l.on_ground = d.on_ground;
-                            dispatch(&ctx, "onMove", .{c});
-                        },
-                        .play_player_digging => |d| {
-                            dispatch(&ctx, "onDig", .{ c, d.location.value, d.status });
-                        },
-                        else => {},
                     }
                 },
                 .player_join => |d| {
