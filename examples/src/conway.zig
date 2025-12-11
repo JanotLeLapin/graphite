@@ -194,8 +194,20 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
             message: []const u8,
         ) !void {
             if (std.mem.eql(u8, message, "conway")) {
+                switch (self.running) {
+                    true => {
+                        const b = try ctx.buffer_pools.allocBuf(.@"10");
+                        const size = try (protocol.ClientPlayChangeGameState{ .change_game_mode = .survival }).encode(b.ptr);
+                        ctx.prepareBroadcast(b, size);
+                    },
+                    false => {
+                        const b = try ctx.buffer_pools.allocBuf(.@"10");
+                        const size = try (protocol.ClientPlayChangeGameState{ .change_game_mode = .creative }).encode(b.ptr);
+                        ctx.prepareBroadcast(b, size);
+                        try ctx.scheduler.schedule(&schedule, 0, @intFromPtr(self));
+                    },
+                }
                 self.running = !self.running;
-                try ctx.scheduler.schedule(&schedule, 0, @intFromPtr(self));
             }
         }
     };
