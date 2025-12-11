@@ -101,6 +101,13 @@ fn processPacket(
                 },
             } });
         },
+        .play_player_digging => |pd| {
+            ctx.tx.push(.{ .player_digging = .{
+                .fd = client.fd,
+                .status = pd.status,
+                .location = pd.location.value,
+            } });
+        },
         else => {},
     }
 }

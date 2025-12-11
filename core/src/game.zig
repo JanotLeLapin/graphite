@@ -189,6 +189,9 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
 
                     dispatch(&ctx, "onMove", .{c});
                 },
+                .player_digging => |d| if (client_manager.get(d.fd)) |c| {
+                    dispatch(&ctx, "onDig", .{ c, d.location, d.status });
+                },
                 .player_chat => |d| if (client_manager.get(d.fd)) |c| {
                     dispatch(&ctx, "onChatMessage", .{ c, d.message[0..d.message_len] });
                 },

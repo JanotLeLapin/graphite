@@ -42,6 +42,11 @@ pub const ServerMessage = union(enum) {
         fd: i32,
         d: common.ecs.Location,
     },
+    player_digging: struct {
+        fd: i32,
+        status: u8,
+        location: common.chunk.Location,
+    },
     player_chat: struct {
         fd: i32,
         message: [128]u8,
