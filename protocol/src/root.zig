@@ -309,6 +309,22 @@ pub const ServerPlayPlayerDigging = struct {
     }
 };
 
+pub const ServerPlayClientSettings = struct {
+    locale: []const u8,
+    view_distance: u8,
+    chat_mode: enum(u8) {
+        enabled = 0,
+        commands_only,
+        hidden,
+    },
+    chat_colors: bool,
+    displayed_skin_parts: u8,
+
+    pub fn decode(buf: []const u8) !@This() {
+        return genDecodeBasic(@This())(buf);
+    }
+};
+
 pub const ServerBoundPacketError = error{
     BadPacketId,
 };
@@ -324,6 +340,7 @@ pub const ServerBoundPacket = union(enum) {
     play_player_look: ServerPlayPlayerLook,
     play_player_position_and_look: ServerPlayPlayerPositionAndLook,
     play_player_digging: ServerPlayPlayerDigging,
+    play_client_settings: ServerPlayClientSettings,
 
     pub fn decode(
         state: ClientState,
@@ -348,6 +365,7 @@ pub const ServerBoundPacket = union(enum) {
                 0x05 => .{ .play_player_look = try ServerPlayPlayerLook.decode(buf) },
                 0x06 => .{ .play_player_position_and_look = try ServerPlayPlayerPositionAndLook.decode(buf) },
                 0x07 => .{ .play_player_digging = try ServerPlayPlayerDigging.decode(buf) },
+                0x15 => .{ .play_client_settings = try ServerPlayClientSettings.decode(buf) },
                 else => return ServerBoundPacketError.BadPacketId,
             },
         };
