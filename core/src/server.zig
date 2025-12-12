@@ -150,7 +150,9 @@ fn createServer() !i32 {
     return server_fd;
 }
 
-pub fn main(efd: i32, rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(root.ServerMessage, true)) !void {
+pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(root.ServerMessage, true)) !void {
+    defer running.store(false, .monotonic);
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
@@ -207,8 +209,7 @@ pub fn main(efd: i32, rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(r
 
     _ = try ring.submit();
 
-    var running = true;
-    while (running) {
+    while (running.load(.monotonic)) {
         var cqe = try ring.waitCqe();
 
         while (true) {
@@ -237,7 +238,7 @@ pub fn main(efd: i32, rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(r
                 .sigint => {
                     log.info("caught sigint", .{});
                     tx.push(.{ .stop = {} });
-                    running = false;
+                    return;
                 },
                 .timer => {
                     try ring.prepareTimer(timer_fd, &tinfo);

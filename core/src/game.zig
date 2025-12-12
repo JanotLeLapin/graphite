@@ -65,7 +65,11 @@ fn dispatch(
     }
 }
 
-pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(common.GameMessage, true)) !void {
+pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(common.GameMessage, true)) !void {
+    defer running.store(false, .monotonic);
+    const v: u64 = 0;
+    defer _ = std.os.linux.write(efd, std.mem.asBytes(&v), 8);
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
@@ -100,8 +104,7 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
         .efd = efd,
     };
 
-    var running = true;
-    while (running) {
+    while (running.load(.monotonic)) {
         while (rx.front()) |msg| {
             switch (msg.*) {
                 .tick => {
@@ -236,7 +239,6 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
                     client_manager.remove(fd);
                 },
                 .stop => {
-                    running = false;
                     break;
                 },
             }

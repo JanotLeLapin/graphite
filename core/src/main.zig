@@ -98,14 +98,16 @@ pub fn main() !void {
 
     const efd = try std.posix.eventfd(0, std.os.linux.EFD.NONBLOCK);
 
+    var running = std.atomic.Value(bool).init(true);
+
     var server_queue = try SpscQueue(common.GameMessage, true).initCapacity(std.heap.page_allocator, 64);
     defer server_queue.deinit();
 
     var game_queue = try SpscQueue(ServerMessage, true).initCapacity(std.heap.page_allocator, 64);
     defer game_queue.deinit();
 
-    const server_thread = try std.Thread.spawn(.{}, server.main, .{ efd, &server_queue, &game_queue });
-    const game_thread = try std.Thread.spawn(.{}, game.main, .{ efd, &game_queue, &server_queue });
+    const server_thread = try std.Thread.spawn(.{}, server.main, .{ &running, efd, &server_queue, &game_queue });
+    const game_thread = try std.Thread.spawn(.{}, game.main, .{ &running, efd, &game_queue, &server_queue });
 
     server_thread.join();
     game_thread.join();
