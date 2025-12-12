@@ -48,7 +48,7 @@ pub const EncodingError = error{
     SubImplFailed,
 };
 
-pub fn decodeValue(comptime T: anytype, buf: []const u8) !struct { value: T, len: usize } {
+pub fn decodeValue(comptime T: type, buf: []const u8) !struct { value: T, len: usize } {
     switch (@typeInfo(T)) {
         .int, .float => {
             const size = @sizeOf(T);
@@ -79,18 +79,32 @@ pub fn decodeValue(comptime T: anytype, buf: []const u8) !struct { value: T, len
                 @compileError("invalid type: " ++ @typeName(T));
             }
 
-            const string = types.String.decode(buf) catch return EncodingError.SubImplFailed;
-            return .{ .value = string.value, .len = string.len };
+            const decoded = types.string.decode(buf) catch return EncodingError.SubImplFailed;
+            return .{
+                .value = decoded.value,
+                .len = decoded.len,
+            };
         },
         .@"struct" => {
-            const val = T.decode(buf) catch return EncodingError.SubImplFailed;
-            return .{ .value = T{ .value = val.value }, .len = val.len };
+            const decoded = switch (T) {
+                types.VarInt, types.VarLong => blk: {
+                    const decoded = T.decode(buf) catch return EncodingError.SubImplFailed;
+                    break :blk .{
+                        .value = T{ .value = decoded.value },
+                        .len = decoded.len,
+                    };
+                },
+                common.chunk.Location => types.location.decode(buf) catch return EncodingError.SubImplFailed,
+                common.slot.SlotData => types.slot.decode(buf) catch return EncodingError.SubImplFailed,
+                else => @compileError("invalid type: " ++ @typeName(T)),
+            };
+            return .{ .value = decoded.value, .len = decoded.len };
         },
         else => @compileError("invalid type: " ++ @typeName(T)),
     }
 }
 
-pub fn encodeValue(comptime T: anytype, v: T, buf: []u8) !usize {
+pub fn encodeValue(comptime T: type, v: T, buf: []u8) !usize {
     switch (@typeInfo(T)) {
         .int, .float => {
             const size = @sizeOf(T);
@@ -121,12 +135,14 @@ pub fn encodeValue(comptime T: anytype, v: T, buf: []u8) !usize {
                 @compileError("invalid type: " ++ @typeName(T));
             }
 
-            const size = types.String.encode(v, buf) catch return EncodingError.SubImplFailed;
-            return size;
+            return types.string.encode(v, buf) catch return EncodingError.SubImplFailed;
         },
         .@"struct" => {
-            const size = T.encode(v.value, buf) catch return EncodingError.SubImplFailed;
-            return size;
+            return switch (T) {
+                types.VarInt, types.VarLong => T.encode(v.value, buf),
+                common.chunk.Location => types.location.encode(v, buf),
+                else => @compileError("invalid type: " ++ @typeName(T)),
+            } catch return EncodingError.SubImplFailed;
         },
         else => @compileError("invalid type: " ++ @typeName(T)),
     }
@@ -317,7 +333,7 @@ pub const ServerPlayPlayerDigging = struct {
         drop_item,
         shoot_arrow_finish_eating,
     },
-    location: types.Location,
+    location: common.chunk.Location,
     face: u8,
 
     pub fn decode(buf: []const u8) !@This() {
@@ -621,7 +637,7 @@ pub const ClientPlayChunkData = struct {
 };
 
 pub const ClientPlayBlockChange = struct {
-    location: types.Location,
+    location: common.chunk.Location,
     block_id: types.VarInt,
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {

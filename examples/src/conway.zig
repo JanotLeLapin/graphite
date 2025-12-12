@@ -50,7 +50,7 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
 
             const size = try (protocol.ClientPlayBlockChange{
                 .block_id = protocol.types.VarInt{ .value = @intCast(block) },
-                .location = protocol.types.Location{ .value = common.chunk.Location{ .x = x, .y = 64, .z = z } },
+                .location = common.chunk.Location{ .x = x, .y = 64, .z = z },
             }).encode(b.ptr);
             ctx.prepareBroadcast(b, size);
         }
@@ -186,7 +186,7 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
                 return;
             }
 
-            try self.flipBlock(ctx, @intCast(d.location.value.x), @intCast(d.location.value.z));
+            try self.flipBlock(ctx, @intCast(d.location.x), @intCast(d.location.z));
         }
 
         pub fn onChatMessage(

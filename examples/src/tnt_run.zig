@@ -100,9 +100,7 @@ fn scheduleRemove(ctx: *common.Context, ud: u64) void {
 
     const size = (protocol.ClientPlayBlockChange{
         .block_id = protocol.types.VarInt{ .value = 0 },
-        .location = protocol.types.Location{
-            .value = common.chunk.Location{ .x = pos.x, .y = 64, .z = pos.z },
-        },
+        .location = common.chunk.Location{ .x = pos.x, .y = 64, .z = pos.z },
     }).encode(b.ptr) catch {
         ctx.buffer_pools.releaseBuf(b.idx);
         return;
