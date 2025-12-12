@@ -132,6 +132,21 @@ pub fn encodeValue(comptime T: anytype, v: T, buf: []u8) !usize {
     }
 }
 
+pub fn encodeNibbles(comptime T: type, slice: []const T) u8 {
+    const bitCount = @typeInfo(T).int.bits;
+    if ((8 % bitCount) != 0) {
+        @compileError("invalid nibble type: " ++ @typeName(T));
+    }
+
+    var res: u8 = 0;
+    for (0..@divTrunc(8, bitCount)) |i| {
+        const b: u8 = @intCast(slice[i]);
+        res = res << bitCount | b;
+    }
+
+    return res;
+}
+
 pub fn encodeChunkData(bit_mask: u16, sky_light: bool, chunk: *const common.chunk.Chunk, buf: []u8) !usize {
     var offset: usize = 0;
 
@@ -145,20 +160,14 @@ pub fn encodeChunkData(bit_mask: u16, sky_light: bool, chunk: *const common.chun
         }
 
         for (0..2048) |j| {
-            offset += try encodeValue(
-                u8,
-                (@as(u8, @intCast(chunk.sections[i].block_light[j * 2])) << 4) | chunk.sections[i].block_light[j * 2 + 1],
-                buf[offset..],
-            );
+            buf[offset] = encodeNibbles(u4, chunk.sections[i].block_light[j * 2 .. j * 2 + 2]);
+            offset += 1;
         }
 
         if (sky_light) {
             for (0..2048) |j| {
-                offset += try encodeValue(
-                    u8,
-                    (@as(u8, @intCast(chunk.sections[i].sky_light[j * 2])) << 4) | chunk.sections[i].sky_light[j * 2 + 1],
-                    buf[offset..],
-                );
+                buf[offset] = encodeNibbles(u4, chunk.sections[i].sky_light[j * 2 .. j * 2 + 2]);
+                offset += 1;
             }
         }
     }
