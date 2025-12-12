@@ -23,9 +23,9 @@ const InitialMap: [4]common.chunk.Chunk = blk: {
                     const meta: common.chunk.WoolColor =
                         if ((abs_x + abs_z) % 2 == 0) .white else .black;
 
-                    chunks[ci].sections[3].blocks[i] = common.chunk.BlockType.wool.getBlockDataMeta(meta);
-                    chunks[ci].sections[3].block_light[i] = 15;
-                    chunks[ci].sections[3].sky_light[i] = 15;
+                    chunks[ci].sections[4].blocks[i] = common.chunk.BlockType.wool.getBlockDataMeta(meta);
+                    chunks[ci].sections[4].block_light[i] = 15;
+                    chunks[ci].sections[4].sky_light[i] = 15;
                 }
             }
 

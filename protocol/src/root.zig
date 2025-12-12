@@ -136,7 +136,7 @@ pub fn encodeChunkData(bit_mask: u16, sky_light: bool, chunk: *const common.chun
     var offset: usize = 0;
 
     for (0..8) |i| {
-        if ((bit_mask & (@as(u8, 2) << @intCast(i))) == 0) {
+        if ((bit_mask & (@as(u8, 1) << @intCast(i))) == 0) {
             continue;
         }
 

@@ -139,9 +139,9 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
                     const bz = z % 16;
                     const bi = bx << 4 | bz;
 
-                    chunks[ci].sections[3].blocks[bi] = block;
-                    chunks[ci].sections[3].block_light[bi] = 15;
-                    chunks[ci].sections[3].sky_light[bi] = 15;
+                    chunks[ci].sections[4].blocks[bi] = block;
+                    chunks[ci].sections[4].block_light[bi] = 15;
+                    chunks[ci].sections[4].sky_light[bi] = 15;
                 }
             }
 
