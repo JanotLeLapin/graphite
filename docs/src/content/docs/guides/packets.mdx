@@ -1,0 +1,86 @@
+---
+title: Sending Packets
+---
+
+Sending packets to clients isn't as trivial as it is with other Minecraft plugin APIs:
+
+```zig
+// acquire a buffer from the pool.
+// there are 4 different pools, each with differently-sized buffers.
+// this will give us a buffer holding 2^6 = 64 bytes
+// that's enough bytes to encode a hello world message.
+const b = try ctx.buffer_pools.allocBuf(.@"6");
+
+// encode the packet onto the buffer
+const size = try protocol.ClientPlayChatMessage.encode(
+  &.{
+    // here we write plain JSON, but we could've used
+    // a formatted Chat struct
+    .json = "{\"text\":\"hello, world!\"}",
+    .position = .chat,
+  },
+  b.ptr,
+) catch {
+  // if this operation fails we want to release the buffer back to the pool
+  // so it can be used again.
+  // you may handle the encoding failure however you'd like, but you need to release the buffer
+  ctx.buffer_pools.releaseBuf(b.idx);
+  return;
+};
+
+// this notifies the server thread that a packet needs to be sent.
+ctx.prepareOneshot(client.fd, b, size);
+
+// from this point onward we don't touch the buffer
+// the server thread temporarily owns it
+// it'll notify the game thread again when it can be released
+```
+
+There are a few reasons why all this boilerplate is required:
+
+Under the hood, the graphite server thread uses io_uring to batch syscalls massively and reduce latency:
+
+```zig
+...
+ctx.prepareBroadcast(b, size);
+```
+
+Using `prepareBroadcast` would ask the server thread to broadcast the packet you provided to all connected players.
+To achieve this, instead of using one syscall for each player, the server thread would batch requests into the SQE ring,
+then emit one syscall to submit the batched requests to the kernel.
+This should significantly reduce latency, especially if your server is running under pressure.
+
+You may also encode multiple packets on a single buffer:
+
+```zig
+const b = try ctx.buffer_pools.allocBuf(.@"10");
+
+var offset: usize = 0;
+offset += try protocol.ClientPlayChatMessage.encode(
+  &.{
+    .json = "{\"text\":\"haiii!\"}",
+    .position = .chat,
+  },
+  b.ptr,
+) catch {
+  ctx.buffer_pools.releaseBuf(b.idx);
+  return;
+};
+offset += protocol.ClientPlaySoundEffect.encode(
+  &.{
+    .sound_name = "note.harp",
+    .x = 0,
+    .y = 0,
+    .z = 0,
+    .volume = 100.0,
+    .pitch = common.pitchFromMidi(69),
+  },
+  b.ptr,
+) catch {
+  ctx.buffer_pools.releaseBuf(b.idx);
+  return;
+};
+
+// broadcast two packets to each player
+ctx.prepareBroadcast(b, size);
+```

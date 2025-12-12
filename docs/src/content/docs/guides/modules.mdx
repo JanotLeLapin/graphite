@@ -1,0 +1,165 @@
+---
+title: Modules
+---
+
+A graphite module is a struct.
+
+```zig
+pub const MyModule = struct {
+  _: u8 = 0, // registering a module with no fields cause a compilation error.
+
+  pub fn init(_: Allocator) !void {
+    return MyModule{};
+  }
+
+  pub fn deinit(self: *MyModule) void {}
+};
+```
+
+Some of its functions (hooks) will be inlined at compile time:
+
+```zig
+pub const MyModule = struct {
+  ...
+
+  // if MyModule is registered, this functon will
+  // be called inline when a message is sent.
+  pub fn onChatMessage(
+    self: *@This(), // current module
+    ctx: *Context, // game context
+    reg: anytype, // module registry
+    client: *Client, // player who sent the message
+    msg: []const u8, // slice pointing to the message
+  ) !void {
+    std.log.info("got message from {s}: {s}", .{
+      client.username.items,
+      msg,
+    });
+  }
+};
+```
+
+## Registering a module
+
+Modules aren't loaded dynamically at runtime like Bukkit plugins;
+Registering a new module requires a recompilation of the Graphite codebase:
+
+```zig
+// core/src/main.zig:
+pub const Modules = .{
+  ...
+  MyModule,
+};
+```
+
+## Module dependencies
+
+Here are two module declarations:
+
+```zig
+// module_a.zig
+pub const ModuleA = struct {
+  counter: usize = 0,
+
+  ...
+};
+
+// module_b.zig
+pub const ModuleB = struct {
+  _: u8,
+
+  ...
+};
+```
+
+At runtime, `ModuleB` may look up `ModuleA` and read from/write to its state, and vice versa. Here's an example:
+
+```zig
+pub const ModuleB = struct {
+  ...
+
+  pub fn onJoin(
+    self: *@This(),
+    ctx: Context,
+    reg: anytype,
+    client: *Client,
+  ) !void {
+    const module_a = reg.get(ModuleA);
+    module_a.counter += 1;
+    std.log.info("counter: {d}", .{ module_a.counter });
+  }
+}
+```
+
+If `ModuleA` isn't registered when `ModuleRegistry.get` is evaluated, this won't compile.
+
+It would be common to express modules as functions that take comptime options and return a struct, such as:
+
+```zig
+pub const ModuleAOptions = struct {
+  name: []const u8,
+  some_flag: bool = true,
+  some_number: i32 = 4,
+  ...
+};
+
+pub fn ModuleA(comptime opt: ModuleAOptions) type {
+  return struct {
+    counter: usize,
+
+    pub fn init(_: Allocator) !void {
+      std.log.info("hello from " ++ opt.name ++ "!");
+      return @This(){
+        .counter = 0,
+      };
+    }
+  };
+}
+```
+
+`ModuleB` can still depend on `ModuleA`:
+
+```zig
+pub const ModuleBOptions = struct {
+  module_a: type,
+};
+
+pub fn ModuleB(comptime opt: ModuleBOptions) type {
+  return struct {
+    _: u8,
+
+    ...
+
+    pub fn onJoin(
+      self: *@This(),
+      ctx: Context,
+      reg: anytype,
+      client: *Client,
+    ) !void {
+      const module_a = reg.get(opt.module_a);
+      module_a.counter += 1;
+      std.log.info("counter: {d}", .{ module_a.counter });
+    }
+  }
+}
+```
+
+You'd need to register both modules for this to compile, here's what this would look like:
+
+```zig
+// core/src/main.zig:
+
+const ModuleA = @import("module_a.zig").ModuleA(.{
+  name = "graphite",
+  some_flag = true,
+});
+
+const ModuleB = @import("module_b.zig").ModuleB(.{
+  module_a = ModuleA,
+});
+
+pub const Modules = .{
+  ModuleA,
+  ModuleB,
+};
+```
