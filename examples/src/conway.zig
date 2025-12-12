@@ -124,6 +124,26 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
             var chunks: [ChunkCount]common.chunk.Chunk = undefined;
             var meta: [ChunkCount]protocol.ChunkMeta = undefined;
 
+            for (0..ChunkRowCount) |cx| {
+                for (0..ChunkRowCount) |cz| {
+                    const ci = cx * ChunkRowCount + cz;
+
+                    for (&chunks[ci].biomes) |*biome| {
+                        biome.* = .plains;
+                    }
+
+                    for (&chunks[ci].sections) |*section| {
+                        @memset(&section.block_light, 15);
+                        @memset(&section.sky_light, 15);
+                        @memset(&section.blocks, 0);
+                    }
+
+                    meta[ci].bit_mask = 1 << 4;
+                    meta[ci].x = @as(i32, @intCast(cx));
+                    meta[ci].z = @as(i32, @intCast(cz));
+                }
+            }
+
             for (0..opt.dim) |x| {
                 for (0..opt.dim) |z| {
                     const block = if (self.grid[x * opt.dim + z])
@@ -140,22 +160,6 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
                     const bi = bx << 4 | bz;
 
                     chunks[ci].sections[4].blocks[bi] = block;
-                    chunks[ci].sections[4].block_light[bi] = 15;
-                    chunks[ci].sections[4].sky_light[bi] = 15;
-                }
-            }
-
-            for (0..ChunkRowCount) |cx| {
-                for (0..ChunkRowCount) |cz| {
-                    const ci = cx * ChunkRowCount + cz;
-
-                    for (&chunks[ci].biomes) |*biome| {
-                        biome.* = .plains;
-                    }
-
-                    meta[ci].bit_mask = 1 << 4;
-                    meta[ci].x = @as(i32, @intCast(cx));
-                    meta[ci].z = @as(i32, @intCast(cz));
                 }
             }
 
