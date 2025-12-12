@@ -5,8 +5,9 @@ title: Modules
 A graphite module is a struct.
 
 ```zig
+// my_module.zig
 pub const MyModule = struct {
-  _: u8 = 0, // registering a module with no fields cause a compilation error.
+  _: u8 = 0, // registering a module with no fields causes a compilation error.
 
   pub fn init(_: Allocator) !void {
     return MyModule{};
@@ -19,6 +20,7 @@ pub const MyModule = struct {
 Some of its functions (hooks) will be inlined at compile time:
 
 ```zig
+// my_module.zig
 pub const MyModule = struct {
   ...
 
@@ -42,10 +44,10 @@ pub const MyModule = struct {
 ## Registering a module
 
 Modules aren't loaded dynamically at runtime like Bukkit plugins;
-Registering a new module requires a recompilation of the Graphite codebase:
+registering a new module requires a recompilation of the Graphite codebase:
 
 ```zig
-// core/src/main.zig:
+// core/src/main.zig
 pub const Modules = .{
   ...
   MyModule,
@@ -57,14 +59,14 @@ pub const Modules = .{
 Here are two module declarations:
 
 ```zig
-// module_a.zig
+// module_a.zig:
 pub const ModuleA = struct {
   counter: usize = 0,
 
   ...
 };
 
-// module_b.zig
+// module_b.zig:
 pub const ModuleB = struct {
   _: u8,
 
@@ -75,6 +77,7 @@ pub const ModuleB = struct {
 At runtime, `ModuleB` may look up `ModuleA` and read from/write to its state, and vice versa. Here's an example:
 
 ```zig
+// module_b.zig
 pub const ModuleB = struct {
   ...
 
@@ -96,6 +99,7 @@ If `ModuleA` isn't registered when `ModuleRegistry.get` is evaluated, this won't
 It would be common to express modules as functions that take comptime options and return a struct, such as:
 
 ```zig
+// module_a.zig
 pub const ModuleAOptions = struct {
   name: []const u8,
   some_flag: bool = true,
@@ -120,6 +124,7 @@ pub fn ModuleA(comptime opt: ModuleAOptions) type {
 `ModuleB` can still depend on `ModuleA`:
 
 ```zig
+// module_b.zig
 pub const ModuleBOptions = struct {
   module_a: type,
 };
@@ -147,8 +152,7 @@ pub fn ModuleB(comptime opt: ModuleBOptions) type {
 You'd need to register both modules for this to compile, here's what this would look like:
 
 ```zig
-// core/src/main.zig:
-
+// core/src/main.zig
 const ModuleA = @import("module_a.zig").ModuleA(.{
   name = "graphite",
   some_flag = true,
