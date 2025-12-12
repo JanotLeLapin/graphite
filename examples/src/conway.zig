@@ -157,7 +157,7 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
 
                     const bx = x % 16;
                     const bz = z % 16;
-                    const bi = bx << 4 | bz;
+                    const bi = bz << 4 | bx;
 
                     chunks[ci].sections[4].blocks[bi] = block;
                 }
