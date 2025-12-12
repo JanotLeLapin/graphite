@@ -139,7 +139,7 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
                                     dispatch(&ctx, "onMove", .{c});
                                 },
                                 .play_player_digging => |d| {
-                                    dispatch(&ctx, "onDig", .{ c, d.location.value, d.status });
+                                    dispatch(&ctx, "onDig", .{ c, d });
                                 },
                                 else => {},
                             }

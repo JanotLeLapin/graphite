@@ -180,14 +180,13 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
             ctx: *common.Context,
             _: anytype,
             _: *common.client.Client,
-            location: common.chunk.Location,
-            status: u8,
+            d: protocol.ServerPlayPlayerDigging,
         ) !void {
-            if (status != 1) {
+            if (d.status != .cancelled_digging and d.status != .finished_digging) {
                 return;
             }
 
-            try self.flipBlock(ctx, @intCast(location.x), @intCast(location.z));
+            try self.flipBlock(ctx, @intCast(d.location.value.x), @intCast(d.location.value.z));
         }
 
         pub fn onChatMessage(
