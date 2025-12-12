@@ -1,9 +1,10 @@
 const std = @import("std");
 
 const common = @import("graphite-common");
+const BlockLocation = common.types.BlockLocation;
 
 const DecodedType = struct {
-    value: common.chunk.Location,
+    value: BlockLocation,
     len: usize,
 };
 
@@ -19,7 +20,7 @@ pub fn decode(buf: []const u8) !DecodedType {
     };
 }
 
-pub fn encode(value: common.chunk.Location, buf: []u8) !usize {
+pub fn encode(value: BlockLocation, buf: []u8) !usize {
     const x: i64 = @intCast(value.x);
     const y: i64 = @intCast(value.y);
     const z: i64 = @intCast(value.z);

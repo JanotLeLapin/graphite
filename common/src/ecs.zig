@@ -1,4 +1,4 @@
-pub const Client = struct { fd: i32 };
+pub const ClientTag = struct { fd: i32 };
 
 pub const Location = struct {
     x: f64,

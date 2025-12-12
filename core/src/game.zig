@@ -4,7 +4,18 @@ const log = std.log.scoped(.game);
 const SpscQueue = @import("spsc_queue").SpscQueue;
 
 const root = @import("root");
+
 const common = @import("graphite-common");
+const Buffer = common.buffer.Buffer;
+const BufferPools = common.buffer.BufferPools;
+const Client = common.client.Client;
+const ClientManager = common.client.ClientManager(Client);
+const ClientTag = common.ecs.ClientTag;
+const Context = common.Context;
+const Location = common.ecs.Location;
+const Scheduler = common.scheduler.Scheduler;
+const zcs = common.zcs;
+
 const protocol = @import("graphite-protocol");
 
 fn keepaliveTask(ctx: *common.Context, _: u64) void {
@@ -59,18 +70,18 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
     defer std.debug.assert(gpa.deinit() == .ok);
 
     const zcs_alloc = gpa.allocator();
-    var entities = try common.zcs.Entities.init(.{
+    var entities = try zcs.Entities.init(.{
         .gpa = zcs_alloc,
     });
     defer entities.deinit(zcs_alloc);
 
-    var client_manager = try common.client.ClientManager(common.client.Client).init(8, gpa.allocator(), gpa.allocator());
+    var client_manager = try ClientManager.init(8, gpa.allocator(), gpa.allocator());
     defer client_manager.deinit();
 
-    var buffer_pools = try common.buffer.BufferPools.init(gpa.allocator());
+    var buffer_pools = try BufferPools.init(gpa.allocator());
     defer buffer_pools.deinit();
 
-    var scheduler = common.scheduler.Scheduler.init(gpa.allocator());
+    var scheduler = Scheduler.init(gpa.allocator());
     defer scheduler.deinit();
 
     try scheduler.schedule(&keepaliveTask, 200, 0);
@@ -78,7 +89,7 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
     var module_registry = try root.ModuleRegistry.init(gpa.allocator());
     defer module_registry.deinit();
 
-    var ctx = common.Context{
+    var ctx = Context{
         .entities = &entities,
         .zcs_alloc = zcs_alloc,
         .client_manager = &client_manager,
@@ -123,7 +134,7 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
                         else => if (client_manager.get(p.fd)) |c| {
                             switch (p.d) {
                                 .play_player_position => |d| {
-                                    const l = c.e.get(&entities, common.ecs.Location).?;
+                                    const l = c.e.get(&entities, Location).?;
                                     l.x = d.x;
                                     l.y = d.y;
                                     l.z = d.z;
@@ -131,7 +142,7 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
                                     dispatch(&ctx, "onMove", .{c});
                                 },
                                 .play_player_position_and_look => |d| {
-                                    const l = c.e.get(&entities, common.ecs.Location).?;
+                                    const l = c.e.get(&entities, Location).?;
                                     l.x = d.x;
                                     l.y = d.y;
                                     l.z = d.z;
@@ -149,19 +160,19 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
                 .player_join => |d| {
                     log.debug("player {d} joined", .{d.fd});
 
-                    var cb = try common.zcs.CmdBuf.init(.{ .name = null, .gpa = zcs_alloc, .es = &entities });
+                    var cb = try zcs.CmdBuf.init(.{ .name = null, .gpa = zcs_alloc, .es = &entities });
                     defer cb.deinit(zcs_alloc, &entities);
 
-                    const e = common.zcs.Entity.reserve(&cb);
-                    _ = e.add(&cb, common.ecs.Client, .{ .fd = d.fd });
-                    _ = e.add(&cb, common.ecs.Location, .{
+                    const e = zcs.Entity.reserve(&cb);
+                    _ = e.add(&cb, ClientTag, .{ .fd = d.fd });
+                    _ = e.add(&cb, Location, .{
                         .x = 0.0,
                         .y = 67.0,
                         .z = 0.0,
                         .on_ground = false,
                     });
 
-                    common.zcs.CmdBuf.Exec.immediate(&entities, &cb);
+                    zcs.CmdBuf.Exec.immediate(&entities, &cb);
 
                     const c = try client_manager.add(d.fd);
                     c.fd = d.fd;
@@ -215,12 +226,12 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
                     log.debug("player {d} left", .{fd});
                     dispatch(&ctx, "onQuit", .{c});
 
-                    var cb = try common.zcs.CmdBuf.init(.{ .name = null, .gpa = zcs_alloc, .es = &entities });
+                    var cb = try zcs.CmdBuf.init(.{ .name = null, .gpa = zcs_alloc, .es = &entities });
                     defer cb.deinit(zcs_alloc, &entities);
 
                     c.e.destroy(&cb);
 
-                    common.zcs.CmdBuf.Exec.immediate(&entities, &cb);
+                    zcs.CmdBuf.Exec.immediate(&entities, &cb);
 
                     client_manager.remove(fd);
                 },
@@ -235,7 +246,7 @@ pub fn main(efd: i32, rx: *SpscQueue(root.ServerMessage, true), tx: *SpscQueue(c
         std.atomic.spinLoopHint();
     }
 
-    inline for (std.meta.fields(common.buffer.BufferPools)) |field| {
+    inline for (std.meta.fields(BufferPools)) |field| {
         log.debug(
             "busy buffers on " ++ field.name ++ ": {d}",
             .{@field(buffer_pools, field.name).busy_count},

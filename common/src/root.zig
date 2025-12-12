@@ -4,21 +4,28 @@ pub const zcs = @import("zcs");
 const SpscQueue = @import("spsc_queue").SpscQueue;
 
 pub const buffer = @import("buffer.zig");
+const Buffer = buffer.Buffer;
+const BufferPools = buffer.BufferPools;
+
 pub const chat = @import("chat.zig");
-pub const chunk = @import("chunk.zig");
 pub const client = @import("client.zig");
+const Client = client.Client;
+const ClientManager = client.ClientManager(Client);
+
 pub const ecs = @import("ecs.zig");
 pub const scheduler = @import("scheduler.zig");
-pub const slot = @import("slot.zig");
+const Scheduler = scheduler.Scheduler;
+
+pub const types = @import("types.zig");
 
 pub const GameMessage = union(enum) {
     prepare_oneshot: struct {
         fd: i32,
-        b: *buffer.Buffer,
+        b: *Buffer,
         size: usize,
     },
     prepare_broadcast: struct {
-        b: *buffer.Buffer,
+        b: *Buffer,
         size: usize,
     },
 };
@@ -89,9 +96,9 @@ pub fn pitchFromMidi(midi: u8) u8 {
 pub const Context = struct {
     entities: *zcs.Entities,
     zcs_alloc: std.mem.Allocator,
-    client_manager: *client.ClientManager(client.Client),
-    buffer_pools: *buffer.BufferPools,
-    scheduler: *scheduler.Scheduler,
+    client_manager: *ClientManager,
+    buffer_pools: *BufferPools,
+    scheduler: *Scheduler,
     module_registry: *anyopaque,
     tx: *SpscQueue(GameMessage, true),
     efd: i32,
@@ -99,7 +106,7 @@ pub const Context = struct {
     pub fn prepareOneshot(
         self: *Context,
         fd: i32,
-        b: *buffer.Buffer,
+        b: *Buffer,
         size: usize,
     ) void {
         self.tx.push(.{ .prepare_oneshot = .{
@@ -114,7 +121,7 @@ pub const Context = struct {
 
     pub fn prepareBroadcast(
         self: *Context,
-        b: *buffer.Buffer,
+        b: *Buffer,
         size: usize,
     ) void {
         self.tx.push(.{ .prepare_broadcast = .{

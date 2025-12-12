@@ -2,7 +2,10 @@
 
 const std = @import("std");
 
-pub const common = @import("graphite-common");
+const common = @import("graphite-common");
+const Chunk = common.types.chunk.Chunk;
+const BlockLocation = common.types.BlockLocation;
+const SlotData = common.types.SlotData;
 
 pub const types = @import("types/mod.zig");
 
@@ -94,8 +97,8 @@ pub fn decodeValue(comptime T: type, buf: []const u8) !struct { value: T, len: u
                         .len = decoded.len,
                     };
                 },
-                common.chunk.Location => types.location.decode(buf) catch return EncodingError.SubImplFailed,
-                common.slot.SlotData => types.slot.decode(buf) catch return EncodingError.SubImplFailed,
+                BlockLocation => types.location.decode(buf) catch return EncodingError.SubImplFailed,
+                SlotData => types.slot.decode(buf) catch return EncodingError.SubImplFailed,
                 else => @compileError("invalid type: " ++ @typeName(T)),
             };
             return .{ .value = decoded.value, .len = decoded.len };
@@ -140,7 +143,7 @@ pub fn encodeValue(comptime T: type, v: T, buf: []u8) !usize {
         .@"struct" => {
             return switch (T) {
                 types.VarInt, types.VarLong => T.encode(v.value, buf),
-                common.chunk.Location => types.location.encode(v, buf),
+                BlockLocation => types.location.encode(v, buf),
                 else => @compileError("invalid type: " ++ @typeName(T)),
             } catch return EncodingError.SubImplFailed;
         },
@@ -163,7 +166,7 @@ pub fn encodeNibbles(comptime T: type, slice: []const T) u8 {
     return res;
 }
 
-pub fn encodeChunkData(bit_mask: u16, sky_light: bool, chunk: *const common.chunk.Chunk, buf: []u8) !usize {
+pub fn encodeChunkData(bit_mask: u16, sky_light: bool, chunk: *const Chunk, buf: []u8) !usize {
     var offset: usize = 0;
 
     for (0..8) |i| {
@@ -333,7 +336,7 @@ pub const ServerPlayPlayerDigging = struct {
         drop_item,
         shoot_arrow_finish_eating,
     },
-    location: common.chunk.Location,
+    location: BlockLocation,
     face: u8,
 
     pub fn decode(buf: []const u8) !@This() {
@@ -608,7 +611,7 @@ pub const ClientPlayChunkData = struct {
     continuous: bool,
     bit_mask: u16,
     sky_light: bool,
-    chunk: *const common.chunk.Chunk,
+    chunk: *const Chunk,
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
         var offset: usize = 5;
@@ -637,7 +640,7 @@ pub const ClientPlayChunkData = struct {
 };
 
 pub const ClientPlayBlockChange = struct {
-    location: common.chunk.Location,
+    location: BlockLocation,
     block_id: types.VarInt,
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
@@ -648,7 +651,7 @@ pub const ClientPlayBlockChange = struct {
 pub const ClientPlayMapChunkBulk = struct {
     sky_light: bool,
     chunk_meta: []const ChunkMeta,
-    chunk_data: []const common.chunk.Chunk,
+    chunk_data: []const Chunk,
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
         var offset: usize = 5;

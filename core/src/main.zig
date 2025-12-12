@@ -3,8 +3,12 @@ const std = @import("std");
 const SpscQueue = @import("spsc_queue").SpscQueue;
 
 const common = @import("graphite-common");
+const BufferIndex = common.buffer.BufferIndex;
+const Location = common.ecs.Location;
+
 const examples = @import("graphite-examples");
 const protocol = @import("graphite-protocol");
+
 const game = @import("game.zig");
 const server = @import("server.zig");
 const uring = @import("uring.zig");
@@ -18,14 +22,21 @@ const LogModule = examples.log.LogModule(.{});
 pub const Modules = .{
     VanillaModule,
     LogModule,
+    examples.pachelbel.PachelbelModule,
+    examples.conway.ConwayModule(.{
+        .dim = 48,
+        .tick_speed = 4,
+        .block_alive = common.types.chunk.BlockType.wool.getBlockDataMeta(common.types.chunk.WoolColor.magenta),
+        .block_dead = common.types.chunk.BlockType.wool.getBlockDataMeta(common.types.chunk.WoolColor.green),
+    }),
 };
 
 pub const ModuleRegistry = common.ModuleRegistry(Modules);
 
 pub const ServerMessage = union(enum) {
     tick,
-    write_result: common.buffer.BufferIndex,
-    write_error: common.buffer.BufferIndex,
+    write_result: BufferIndex,
+    write_error: BufferIndex,
 
     packet: struct {
         fd: i32,
@@ -36,7 +47,7 @@ pub const ServerMessage = union(enum) {
         username: [64]u8,
         username_len: usize,
         addr: std.os.linux.sockaddr,
-        location: common.ecs.Location,
+        location: Location,
     },
     player_chat: struct {
         fd: i32,

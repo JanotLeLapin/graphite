@@ -1,6 +1,14 @@
 const std = @import("std");
 
 const common = @import("graphite-common");
+const BlockLocation = common.types.BlockLocation;
+const BlockType = common.types.chunk.BlockType;
+const Chat = common.chat.Chat;
+const Chunk = common.types.chunk.Chunk;
+const Client = common.client.Client;
+const Context = common.Context;
+const WoolColor = common.types.chunk.WoolColor;
+
 const protocol = @import("graphite-protocol");
 
 const BlockPos = packed struct(u64) {
@@ -8,9 +16,9 @@ const BlockPos = packed struct(u64) {
     z: i32,
 };
 
-const InitialMap: [4]common.chunk.Chunk = blk: {
+const InitialMap: [4]Chunk = blk: {
     @setEvalBranchQuota(4096);
-    var chunks: [4]common.chunk.Chunk = undefined;
+    var chunks: [4]Chunk = undefined;
     for (0..2) |cx| {
         for (0..2) |cz| {
             const ci = cx << 1 | cz;
@@ -20,10 +28,10 @@ const InitialMap: [4]common.chunk.Chunk = blk: {
                     const abs_x = x + 16 * cx;
                     const abs_z = z + 16 * cz;
 
-                    const meta: common.chunk.WoolColor =
+                    const meta: WoolColor =
                         if ((abs_x + abs_z) % 2 == 0) .white else .black;
 
-                    chunks[ci].sections[4].blocks[i] = common.chunk.BlockType.wool.getBlockDataMeta(meta);
+                    chunks[ci].sections[4].blocks[i] = BlockType.wool.getBlockDataMeta(meta);
                     chunks[ci].sections[4].block_light[i] = 15;
                     chunks[ci].sections[4].sky_light[i] = 15;
                 }
@@ -50,7 +58,7 @@ const InitialMapMeta: [4]protocol.ChunkMeta = blk: {
     break :blk meta;
 };
 
-fn scheduleTimer(ctx: *common.Context, ud: u64) void {
+fn scheduleTimer(ctx: *Context, ud: u64) void {
     const b = ctx.buffer_pools.allocBuf(.@"14") catch return;
 
     var offset: usize = 0;
@@ -94,13 +102,13 @@ fn scheduleTimer(ctx: *common.Context, ud: u64) void {
     ctx.prepareBroadcast(b, offset);
 }
 
-fn scheduleRemove(ctx: *common.Context, ud: u64) void {
+fn scheduleRemove(ctx: *Context, ud: u64) void {
     const pos: BlockPos = @bitCast(ud);
     const b = ctx.buffer_pools.allocBuf(.@"10") catch return;
 
     const size = (protocol.ClientPlayBlockChange{
         .block_id = protocol.types.VarInt{ .value = 0 },
-        .location = common.chunk.Location{ .x = pos.x, .y = 64, .z = pos.z },
+        .location = BlockLocation{ .x = pos.x, .y = 64, .z = pos.z },
     }).encode(b.ptr) catch {
         ctx.buffer_pools.releaseBuf(b.idx);
         return;
@@ -109,14 +117,14 @@ fn scheduleRemove(ctx: *common.Context, ud: u64) void {
     ctx.prepareBroadcast(b, size);
 }
 
-fn scheduleStart(_: *common.Context, ud: u64) void {
+fn scheduleStart(_: *Context, ud: u64) void {
     const running: *bool = @ptrFromInt(ud);
     running.* = true;
 }
 
 pub const TntRunModule = struct {
     running: bool = false,
-    chunks: [4]common.chunk.Chunk = InitialMap,
+    chunks: [4]Chunk = InitialMap,
 
     pub fn init(_: std.mem.Allocator) !@This() {
         return @This(){};
@@ -126,9 +134,9 @@ pub const TntRunModule = struct {
 
     pub fn onJoin(
         self: *@This(),
-        ctx: *common.Context,
+        ctx: *Context,
         _: anytype,
-        client: *common.client.Client,
+        client: *Client,
     ) !void {
         const b = try ctx.buffer_pools.allocBuf(.@"18");
         errdefer ctx.buffer_pools.releaseBuf(b.idx);
@@ -143,9 +151,9 @@ pub const TntRunModule = struct {
 
     pub fn onChatMessage(
         self: *@This(),
-        ctx: *common.Context,
+        ctx: *Context,
         _: anytype,
-        _: *common.client.Client,
+        _: *Client,
         message: []const u8,
     ) !void {
         if (std.mem.eql(u8, "start", message)) {
@@ -176,9 +184,9 @@ pub const TntRunModule = struct {
 
     pub fn onMove(
         self: *@This(),
-        ctx: *common.Context,
+        ctx: *Context,
         _: anytype,
-        client: *common.client.Client,
+        client: *Client,
     ) !void {
         if (!self.running) {
             return;
@@ -200,7 +208,7 @@ pub const TntRunModule = struct {
                     .{common.chat.Chat{
                         .text = "",
                         .color = .yellow,
-                        .extra = &[_]common.chat.Chat{
+                        .extra = &.{
                             .{ .text = client.username.items, .color = .red },
                             .{ .text = " est un gros loser" },
                         },

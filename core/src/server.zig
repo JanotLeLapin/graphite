@@ -6,7 +6,11 @@ const SpscQueue = @import("spsc_queue").SpscQueue;
 
 const root = @import("root");
 const common = @import("graphite-common");
+const ClientManager = common.client.ClientManager(Client);
+
 const protocol = @import("graphite-protocol");
+const VarInt = protocol.types.VarInt;
+
 const uring = @import("uring.zig");
 
 const PORT = 25565;
@@ -24,7 +28,7 @@ pub const Client = struct {
 
 pub const Context = struct {
     ring: *uring.Ring,
-    client_manager: *common.client.ClientManager(Client),
+    client_manager: *ClientManager,
     tx: *SpscQueue(root.ServerMessage, true),
 };
 
@@ -83,7 +87,7 @@ fn splitPackets(ctx: *Context, client: *Client) void {
     while (true) {
         var offset = global_offset;
 
-        const len = protocol.types.VarInt.decode(client.read_buf[offset..client.read_buf_tail]) catch break;
+        const len = VarInt.decode(client.read_buf[offset..client.read_buf_tail]) catch break;
         offset += len.len;
 
         if (client.read_buf_tail - offset < len.value) {
@@ -92,7 +96,7 @@ fn splitPackets(ctx: *Context, client: *Client) void {
 
         const packet_end = offset + @as(usize, @intCast(len.value));
 
-        const id = protocol.types.VarInt.decode(client.read_buf[offset..packet_end]) catch break;
+        const id = VarInt.decode(client.read_buf[offset..packet_end]) catch break;
         offset += id.len;
 
         const p = protocol.ServerBoundPacket.decode(client.state, id.value, client.read_buf[offset..packet_end]) catch {
@@ -150,7 +154,7 @@ pub fn main(efd: i32, rx: *SpscQueue(common.GameMessage, true), tx: *SpscQueue(r
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
 
-    var client_manager = try common.client.ClientManager(Client).init(8, gpa.allocator(), gpa.allocator());
+    var client_manager = try ClientManager.init(8, gpa.allocator(), gpa.allocator());
     defer client_manager.deinit();
 
     const sig_fd = try createSig();

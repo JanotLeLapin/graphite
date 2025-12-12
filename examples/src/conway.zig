@@ -5,6 +5,11 @@
 const std = @import("std");
 
 const common = @import("graphite-common");
+const BlockLocation = common.types.BlockLocation;
+const Client = common.client.Client;
+const Context = common.Context;
+const Chunk = common.types.chunk.Chunk;
+
 const protocol = @import("graphite-protocol");
 
 pub const ConwayModuleOptions = struct {
@@ -50,7 +55,7 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
 
             const size = try (protocol.ClientPlayBlockChange{
                 .block_id = protocol.types.VarInt{ .value = @intCast(block) },
-                .location = common.chunk.Location{ .x = x, .y = 64, .z = z },
+                .location = BlockLocation{ .x = x, .y = 64, .z = z },
             }).encode(b.ptr);
             ctx.prepareBroadcast(b, size);
         }
@@ -117,11 +122,11 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
 
         pub fn onJoin(
             self: *@This(),
-            ctx: *common.Context,
+            ctx: *Context,
             _: anytype,
-            client: *common.client.Client,
+            client: *Client,
         ) !void {
-            var chunks: [ChunkCount]common.chunk.Chunk = undefined;
+            var chunks: [ChunkCount]Chunk = undefined;
             var meta: [ChunkCount]protocol.ChunkMeta = undefined;
 
             for (0..ChunkRowCount) |cx| {
@@ -177,9 +182,9 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
 
         pub fn onDig(
             self: *@This(),
-            ctx: *common.Context,
+            ctx: *Context,
             _: anytype,
-            _: *common.client.Client,
+            _: *Client,
             d: protocol.ServerPlayPlayerDigging,
         ) !void {
             if (d.status != .cancelled_digging and d.status != .finished_digging) {
@@ -191,9 +196,9 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
 
         pub fn onChatMessage(
             self: *@This(),
-            ctx: *common.Context,
+            ctx: *Context,
             _: anytype,
-            _: *common.client.Client,
+            _: *Client,
             message: []const u8,
         ) !void {
             if (std.mem.eql(u8, message, "conway")) {

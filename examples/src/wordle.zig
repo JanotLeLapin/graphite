@@ -1,6 +1,11 @@
 const std = @import("std");
 
 const common = @import("graphite-common");
+const Chat = common.chat.Chat;
+const ChatColor = common.chat.ChatColor;
+const Client = common.client.Client;
+const Context = common.Context;
+
 const protocol = @import("graphite-protocol");
 
 const NoteTaskData = packed struct(u64) {
@@ -14,7 +19,7 @@ const CharStatus = enum(u2) {
     present = 1,
     spot_on = 2,
 
-    fn getColor(self: CharStatus) common.chat.ChatColor {
+    fn getColor(self: CharStatus) ChatColor {
         return switch (self) {
             .miss => .gray,
             .present => .yellow,
@@ -22,8 +27,6 @@ const CharStatus = enum(u2) {
         };
     }
 };
-
-pub const WordleModuleError = error{EncodingFailure};
 
 pub const WordleModule = struct {
     word: [5]u8,
@@ -47,9 +50,9 @@ pub const WordleModule = struct {
 
     pub fn onChatMessage(
         self: *WordleModule,
-        ctx: *common.Context,
+        ctx: *Context,
         _: anytype,
-        client: *common.client.Client,
+        client: *Client,
         message: []const u8,
     ) !void {
         for (self.winners.items) |fd| {
@@ -87,7 +90,7 @@ pub const WordleModule = struct {
                 "{f}",
                 .{common.chat.Chat{
                     .text = "guess: ",
-                    .extra = &[_]common.chat.Chat{
+                    .extra = &.{
                         .{ .text = message[0..1], .color = statuses[0].getColor() },
                         .{ .text = message[1..2], .color = statuses[1].getColor() },
                         .{ .text = message[2..3], .color = statuses[2].getColor() },
@@ -102,7 +105,7 @@ pub const WordleModule = struct {
         if (std.mem.eql(CharStatus, &statuses, &.{ .spot_on, .spot_on, .spot_on, .spot_on, .spot_on })) {
             try self.winners.append(self.alloc, client.fd);
             offset += try protocol.ClientPlayChatMessage.encode(&.{
-                .json = try std.fmt.bufPrint(&buf, "{f}", .{common.chat.Chat{ .text = "good guess!", .color = .green }}),
+                .json = try std.fmt.bufPrint(&buf, "{f}", .{Chat{ .text = "good guess!", .color = .green }}),
                 .position = .system,
             }, b.ptr[offset..]);
 
@@ -116,7 +119,7 @@ pub const WordleModule = struct {
     }
 };
 
-fn playNoteTask(ctx: *common.Context, userdata: u64) void {
+fn playNoteTask(ctx: *Context, userdata: u64) void {
     const noteData: NoteTaskData = @bitCast(userdata);
 
     _ = ctx.client_manager.get(noteData.client_fd) orelse return;

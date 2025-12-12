@@ -1,6 +1,8 @@
 const std = @import("std");
 
 const common = @import("graphite-common");
+const Client = common.client.Client;
+const Context = common.Context;
 
 pub fn formatAddr(buf: []u8, addr: *const std.posix.sockaddr) ![]u8 {
     if (addr.family != std.posix.AF.INET) {
@@ -59,18 +61,18 @@ pub fn LogModule(comptime opt: LogModuleOptions) type {
 
         pub fn onQuit(
             _: *@This(),
-            _: *common.Context,
+            _: *Context,
             _: anytype,
-            client: *common.client.Client,
+            client: *Client,
         ) !void {
             try info("quit", "", opt, client, .{});
         }
 
         pub fn onChatMessage(
             _: *@This(),
-            _: *common.Context,
+            _: *Context,
             _: anytype,
-            client: *common.client.Client,
+            client: *Client,
             msg: []const u8,
         ) !void {
             try info("chat", ": {s}", opt, client, .{msg});

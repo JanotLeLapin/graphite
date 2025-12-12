@@ -1,11 +1,14 @@
 const std = @import("std");
 
 const common = @import("graphite-common");
+const Chat = common.chat.Chat;
+const Client = common.client.Client;
+const Context = common.Context;
 const protocol = @import("graphite-protocol");
 
 pub const VanillaStatusOptions = struct {
     version_name: []const u8,
-    description: common.chat.Chat,
+    description: Chat,
 };
 
 pub const VanillaModuleOptions = struct {
@@ -19,8 +22,8 @@ pub const VanillaModuleOptions = struct {
 
 fn broadcastMessage(
     comptime buf_len: usize,
-    ctx: *common.Context,
-    message: common.chat.Chat,
+    ctx: *Context,
+    message: Chat,
 ) !void {
     const b = try ctx.buffer_pools.allocBuf(.@"10");
     errdefer ctx.buffer_pools.releaseBuf(b.idx);
@@ -52,7 +55,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
 
         pub fn onStatus(
             _: *@This(),
-            ctx: *common.Context,
+            ctx: *Context,
             _: anytype,
             fd: i32,
         ) !void {
@@ -77,9 +80,9 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
 
         pub fn onJoin(
             _: *@This(),
-            ctx: *common.Context,
+            ctx: *Context,
             _: anytype,
-            client: *common.client.Client,
+            client: *Client,
         ) !void {
             if (!opt.send_join_message) {
                 return;
@@ -88,7 +91,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
             try broadcastMessage(256, ctx, common.chat.Chat{
                 .text = "",
                 .color = .yellow,
-                .extra = &[_]common.chat.Chat{
+                .extra = &.{
                     .{ .text = client.username.items },
                     .{ .text = " joined the game" },
                 },
@@ -97,15 +100,15 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
 
         pub fn onChatMessage(
             _: *@This(),
-            ctx: *common.Context,
+            ctx: *Context,
             _: anytype,
-            client: *common.client.Client,
+            client: *Client,
             message: []const u8,
         ) !void {
-            try broadcastMessage(1024, ctx, common.chat.Chat{
+            try broadcastMessage(1024, ctx, Chat{
                 .text = "",
                 .color = .white,
-                .extra = &[_]common.chat.Chat{
+                .extra = &.{
                     .{ .text = "<" },
                     .{ .text = client.username.items },
                     .{ .text = "> " },
@@ -116,18 +119,18 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
 
         pub fn onQuit(
             _: *@This(),
-            ctx: *common.Context,
+            ctx: *Context,
             _: anytype,
-            client: *common.client.Client,
+            client: *Client,
         ) !void {
             if (!opt.send_quit_message) {
                 return;
             }
 
-            try broadcastMessage(256, ctx, common.chat.Chat{
+            try broadcastMessage(256, ctx, Chat{
                 .text = "",
                 .color = .yellow,
-                .extra = &[_]common.chat.Chat{
+                .extra = &.{
                     .{ .text = client.username.items },
                     .{ .text = " left the game" },
                 },
