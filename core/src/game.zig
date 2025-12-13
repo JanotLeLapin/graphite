@@ -183,20 +183,20 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
                         else => if (client_manager.get(p.fd)) |c| {
                             switch (p.d) {
                                 .play_player_position => |d| {
-                                    const l = c.e.get(&entities, EntityLocation).?;
-                                    l.x = d.x;
-                                    l.y = d.y;
-                                    l.z = d.z;
-                                    l.on_ground = d.on_ground;
-                                    dispatch(&ctx, "onMove", .{c});
+                                    dispatch(&ctx, "onMove", .{ c, EntityLocation{
+                                        .x = d.x,
+                                        .y = d.y,
+                                        .z = d.z,
+                                        .on_ground = d.on_ground,
+                                    } });
                                 },
                                 .play_player_position_and_look => |d| {
-                                    const l = c.e.get(&entities, EntityLocation).?;
-                                    l.x = d.x;
-                                    l.y = d.y;
-                                    l.z = d.z;
-                                    l.on_ground = d.on_ground;
-                                    dispatch(&ctx, "onMove", .{c});
+                                    dispatch(&ctx, "onMove", .{ c, EntityLocation{
+                                        .x = d.x,
+                                        .y = d.y,
+                                        .z = d.z,
+                                        .on_ground = d.on_ground,
+                                    } });
                                 },
                                 .play_player_digging => |d| {
                                     dispatch(&ctx, "onDig", .{ c, d });
@@ -214,12 +214,6 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
 
                     const e = zcs.Entity.reserve(&cb);
                     _ = e.add(&cb, ClientTag, .{ .fd = d.fd });
-                    _ = e.add(&cb, EntityLocation, .{
-                        .x = 0.0,
-                        .y = 67.0,
-                        .z = 0.0,
-                        .on_ground = false,
-                    });
 
                     zcs.CmdBuf.Exec.immediate(&entities, &cb);
 
