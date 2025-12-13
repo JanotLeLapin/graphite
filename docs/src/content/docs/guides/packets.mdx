@@ -5,6 +5,49 @@ title: Sending Packets
 Sending packets to clients isn't as trivial as it is with other Minecraft plugin APIs:
 
 ```zig
+const b, const size = try ctx.encode(
+  protocol.ClientPlayChatMessage.{
+    // here we write plain JSON, but we could've used
+    // a formatted Chat struct
+    .json = "{\"text\":\"hello, world!\"}",
+    .position = .chat,
+  },
+  .@"6", // the buffer pool we want to use, more on this later
+);
+ctx.prepareOneshot(client.fd, b, size);
+```
+
+In this snippet, `ctx.encode` will acquire a buffer from the pool we
+requested and encode the packet we provided onto it.
+It will then return the acquired buffer, and the total number
+of bytes written.
+
+We can pass this buffer to the server thread with `ctx.prepareOneshot`.
+It will send it to the specified client.
+
+## Performance
+
+Under the hood, the graphite server thread uses io_uring
+to batch syscalls massively and reduce latency:
+
+```zig
+...
+ctx.prepareBroadcast(b, size);
+```
+
+Using `prepareBroadcast` would ask the server thread to broadcast
+the packet you provided to all connected players. To achieve this,
+instead of using one syscall for each player, the server thread
+would batch requests into the SQE ring, then emit one syscall to
+submit the batched requests to the kernel.
+This should significantly reduce latency, especially if
+your server is running under pressure.
+
+## The verbose way
+
+Sometimes you might want to use the lower-level way to encode packets:
+
+```zig
 // acquire a buffer from the pool.
 // there are 4 different pools, each with differently-sized buffers.
 // this will give us a buffer holding 2^6 = 64 bytes
@@ -14,8 +57,6 @@ const b = try ctx.buffer_pools.allocBuf(.@"6");
 // encode the packet onto the buffer
 const size = try protocol.ClientPlayChatMessage.encode(
   &.{
-    // here we write plain JSON, but we could've used
-    // a formatted Chat struct
     .json = "{\"text\":\"hello, world!\"}",
     .position = .chat,
   },
@@ -36,21 +77,8 @@ ctx.prepareOneshot(client.fd, b, size);
 // it'll notify the game thread again when it can be released
 ```
 
-There are a few reasons why all this boilerplate is required:
-
-Under the hood, the graphite server thread uses io_uring to batch syscalls massively and reduce latency:
-
-```zig
-...
-ctx.prepareBroadcast(b, size);
-```
-
-Using `prepareBroadcast` would ask the server thread to broadcast the packet you provided to all connected players.
-To achieve this, instead of using one syscall for each player, the server thread would batch requests into the SQE ring,
-then emit one syscall to submit the batched requests to the kernel.
-This should significantly reduce latency, especially if your server is running under pressure.
-
-You may also encode multiple packets on a single buffer:
+This is useful when you need to encode multiple packets onto
+the same, single buffer:
 
 ```zig
 const b = try ctx.buffer_pools.allocBuf(.@"10");
@@ -83,4 +111,24 @@ offset += protocol.ClientPlaySoundEffect.encode(
 
 // broadcast two packets to each player
 ctx.prepareBroadcast(b, size);
+```
+
+## Buffer pools
+
+Right now, there are 4 buffer pools, each with differently-sized buffers
+(i.e, the max number of bytes you can write onto them).
+Here's the capacity of each buffer pool:
+
+- `6`: `2^6 = 64`
+- `10`: `2^10 = 1024`
+- `14`: `2^14 = 16384`
+- `18`: `2^18 = 262144`
+
+This system bypasses the need to allocate new data from the heap
+every time you want to encode a packet.
+
+```zig
+const b = try ctx.buffer_pools.allocBuf(.@"18");
+// you now temporarily own a big buffer!
+// better write some stuff in it
 ```
