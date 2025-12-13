@@ -12,7 +12,6 @@ pub const client = @import("client.zig");
 const Client = client.Client;
 const ClientManager = client.ClientManager(Client);
 
-pub const ecs = @import("ecs.zig");
 pub const scheduler = @import("scheduler.zig");
 const Scheduler = scheduler.Scheduler;
 

@@ -140,7 +140,6 @@ pub fn TntRunModule(opt: TntRunModuleOptions) type {
         pub fn onJoin(
             self: *@This(),
             reg: anytype,
-            cb: *zcs.CmdBuf,
             ctx: *Context,
             client: *Client,
         ) !void {
