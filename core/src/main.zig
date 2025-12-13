@@ -24,24 +24,8 @@ const LocationModule = module.LocationModule(.{
     },
 });
 
-const VanillaModule = examples.vanilla.VanillaModule(.{
-    .send_join_message = true,
-    .send_quit_message = true,
-});
-const LogModule = examples.log.LogModule(.{});
-
 pub const Modules = .{
     LocationModule,
-
-    VanillaModule,
-    LogModule,
-    examples.pachelbel.PachelbelModule,
-    examples.conway.ConwayModule(.{
-        .dim = 48,
-        .tick_speed = 4,
-        .block_alive = common.types.chunk.BlockType.wool.getBlockDataMeta(common.types.chunk.WoolColor.magenta),
-        .block_dead = common.types.chunk.BlockType.wool.getBlockDataMeta(common.types.chunk.WoolColor.green),
-    }),
 };
 
 pub const ModuleRegistry = common.ModuleRegistry(Modules);
