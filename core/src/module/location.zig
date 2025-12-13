@@ -17,7 +17,7 @@ pub fn euclideanDist(a: EntityLocation, b: EntityLocation) f64 {
 
 pub const LocationModuleOptions = struct {
     spawn_point: EntityLocation,
-    max_dist: ?usize = null,
+    max_dist: ?f64 = null,
 };
 
 /// Resets a client's location component when a position packet is received
