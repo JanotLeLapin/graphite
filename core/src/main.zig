@@ -14,6 +14,16 @@ const module = @import("module.zig");
 const server = @import("server.zig");
 const uring = @import("uring.zig");
 
+const LocationModule = module.LocationModule(.{
+    .max_dist = 6.0,
+    .spawn_point = .{
+        .x = 0,
+        .y = 67,
+        .z = 0,
+        .on_ground = false,
+    },
+});
+
 const VanillaModule = examples.vanilla.VanillaModule(.{
     .send_join_message = true,
     .send_quit_message = true,
@@ -21,6 +31,8 @@ const VanillaModule = examples.vanilla.VanillaModule(.{
 const LogModule = examples.log.LogModule(.{});
 
 pub const Modules = .{
+    LocationModule,
+
     VanillaModule,
     LogModule,
     examples.pachelbel.PachelbelModule,
