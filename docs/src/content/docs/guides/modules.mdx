@@ -46,6 +46,7 @@ Any hook may take one of the following argument types, the ordering is interchan
 - `*@This()`: current module
 - `*Context`: game context
 - `anytype`: module registry
+- `*zcs.CmdBuf`: a [zcs](https://github.com/Games-by-Mason/ZCS) `CmdBuf`
 
 Since the final `ModuleRegistry` type is a tuple that depends on every registered
 module types, individual modules can't directly access it. Instead, the dispatcher
