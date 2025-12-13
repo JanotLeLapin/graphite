@@ -1,4 +1,5 @@
 const std = @import("std");
+const log = std.log.scoped(.location_mod);
 
 const common = @import("graphite-common");
 const Client = common.client.Client;
@@ -19,6 +20,7 @@ pub const LocationModuleOptions = struct {
     max_dist: ?usize = null,
 };
 
+/// Resets a client's location component when a position packet is received
 pub fn LocationModule(comptime opt: LocationModuleOptions) type {
     return struct {
         _: u8 = 0,
@@ -39,13 +41,18 @@ pub fn LocationModule(comptime opt: LocationModuleOptions) type {
             location: EntityLocation,
         ) !void {
             const l = client.e.get(ctx.entities, EntityLocation).?;
-            if (opt.max_dist == null or euclideanDist(location, l.*) <= opt.max_dist.?) {
-                l.* = location;
-                return;
+            if (opt.max_dist) |md| {
+                const dist = euclideanDist(location, l.*);
+                if (dist > md) {
+                    log.warn("kicking {s}: moved too fast: {d} blocks", .{
+                        client.username.items,
+                        dist,
+                    });
+                    ctx.disconnect(client.fd);
+                    return;
+                }
             }
-
-            std.log.warn("moving too fast: {s}!", .{client.username.items});
-            // TODO: kick or something
+            l.* = location;
         }
     };
 }
