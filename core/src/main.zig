@@ -4,7 +4,7 @@ const SpscQueue = @import("spsc_queue").SpscQueue;
 
 const common = @import("graphite-common");
 const BufferIndex = common.buffer.BufferIndex;
-const Location = common.ecs.Location;
+const EntityLocation = common.types.EntityLocation;
 
 const examples = @import("graphite-examples");
 const protocol = @import("graphite-protocol");
@@ -47,7 +47,7 @@ pub const ServerMessage = union(enum) {
         username: [64]u8,
         username_len: usize,
         addr: std.os.linux.sockaddr,
-        location: Location,
+        location: EntityLocation,
     },
     player_chat: struct {
         fd: i32,

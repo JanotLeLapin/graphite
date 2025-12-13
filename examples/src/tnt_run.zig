@@ -189,7 +189,7 @@ pub const TntRunModule = struct {
             return;
         }
 
-        const l = client.e.get(ctx.entities, common.ecs.Location).?;
+        const l = client.e.get(ctx.entities, common.types.EntityLocation).?;
 
         if (l.y < 50) {
             self.running = false;

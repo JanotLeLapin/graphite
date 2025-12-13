@@ -135,7 +135,7 @@ fn playNoteTask(ctx: *common.Context, userdata: u64) void {
 
     const client = ctx.client_manager.get(noteData.client_fd) orelse return;
     // get location component from player entity
-    const l = client.e.get(ctx.entities, common.ecs.Location) orelse return;
+    const l = client.e.get(ctx.entities, common.types.EntityLocation) orelse return;
 
     // allocate a buffer of 2^10 bytes
     const b = ctx.buffer_pools.allocBuf(.@"10") catch return;

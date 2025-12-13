@@ -10,9 +10,9 @@ const Buffer = common.buffer.Buffer;
 const BufferPools = common.buffer.BufferPools;
 const Client = common.client.Client;
 const ClientManager = common.client.ClientManager(Client);
-const ClientTag = common.ecs.ClientTag;
+const ClientTag = common.types.ClientTag;
 const Context = common.Context;
-const Location = common.ecs.Location;
+const EntityLocation = common.types.EntityLocation;
 const Scheduler = common.scheduler.Scheduler;
 const zcs = common.zcs;
 
@@ -183,7 +183,7 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
                         else => if (client_manager.get(p.fd)) |c| {
                             switch (p.d) {
                                 .play_player_position => |d| {
-                                    const l = c.e.get(&entities, Location).?;
+                                    const l = c.e.get(&entities, EntityLocation).?;
                                     l.x = d.x;
                                     l.y = d.y;
                                     l.z = d.z;
@@ -191,7 +191,7 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
                                     dispatch(&ctx, "onMove", .{c});
                                 },
                                 .play_player_position_and_look => |d| {
-                                    const l = c.e.get(&entities, Location).?;
+                                    const l = c.e.get(&entities, EntityLocation).?;
                                     l.x = d.x;
                                     l.y = d.y;
                                     l.z = d.z;
@@ -214,7 +214,7 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
 
                     const e = zcs.Entity.reserve(&cb);
                     _ = e.add(&cb, ClientTag, .{ .fd = d.fd });
-                    _ = e.add(&cb, Location, .{
+                    _ = e.add(&cb, EntityLocation, .{
                         .x = 0.0,
                         .y = 67.0,
                         .z = 0.0,
