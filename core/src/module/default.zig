@@ -19,6 +19,8 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
 
         fn prepareAddOne(ctx: *Context, client: *Client) !void {
             const b = try ctx.buffer_pools.allocBuf(.@"6");
+            errdefer ctx.buffer_pools.releaseBuf(b.idx);
+
             const size = try (protocol.ClientPlayPlayerListItem{
                 .add_player = &.{
                     .{
@@ -54,6 +56,8 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
             }
 
             const b = try ctx.buffer_pools.allocBuf(.@"14");
+            errdefer ctx.buffer_pools.releaseBuf(b.idx);
+
             const size = try (protocol.ClientPlayPlayerListItem{
                 .add_player = list.items,
             }).encode(b.ptr);
@@ -75,6 +79,17 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
             }
         }
 
-        // pub fn onQuit(ctx: *Context) !void {}
+        pub fn onQuit(ctx: *Context, client: *Client) !void {
+            if (opt.update_playerlist) {
+                const b = try ctx.buffer_pools.allocBuf(.@"6");
+                const size = (protocol.ClientPlayPlayerListItem{
+                    .remove_player = &.{client.uuid},
+                }).encode(b.ptr) catch {
+                    ctx.buffer_pools.releaseBuf(b.idx);
+                    return;
+                };
+                ctx.prepareBroadcast(b, size);
+            }
+        }
     };
 }
