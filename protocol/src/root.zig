@@ -761,18 +761,20 @@ pub const ClientPlaySetSlot = struct {
 };
 
 pub const ClientPlayPlayerListItem = union(enum) {
-    add_player: []const struct {
+    add_player: []const AddPlayer,
+    update_gamemode,
+    update_latency,
+    update_display_name,
+    remove_player,
+
+    pub const AddPlayer = struct {
         uuid: common.Uuid,
         name: []const u8,
         // TODO: properties
         gamemode: u8,
         ping: i32,
         display_name: ?[]const u8,
-    },
-    update_gamemode,
-    update_latency,
-    update_display_name,
-    remove_player,
+    };
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
         var offset: usize = 5;
