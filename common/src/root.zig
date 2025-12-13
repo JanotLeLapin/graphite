@@ -103,6 +103,21 @@ pub const Context = struct {
     tx: *SpscQueue(GameMessage, true),
     efd: i32,
 
+    pub fn encode(
+        self: *Context,
+        packet: anytype,
+        comptime buffer_size: buffer.BufferSize,
+    ) !std.meta.Tuple(&.{
+        *Buffer,
+        usize,
+    }) {
+        const b = try self.buffer_pools.allocBuf(buffer_size);
+        errdefer self.buffer_pools.releaseBuf(b.idx);
+
+        const size = try packet.encode(b.ptr);
+        return .{ b, size };
+    }
+
     pub fn prepareOneshot(
         self: *Context,
         fd: i32,
