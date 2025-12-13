@@ -122,112 +122,122 @@ fn scheduleStart(_: *Context, ud: u64) void {
     running.* = true;
 }
 
-pub const TntRunModule = struct {
-    running: bool = false,
-    chunks: [4]Chunk = InitialMap,
+pub const TntRunModuleOptions = struct {
+    location_mod: type,
+};
 
-    pub fn init(_: std.mem.Allocator) !@This() {
-        return @This(){};
-    }
+pub fn TntRunModule(opt: TntRunModuleOptions) type {
+    return struct {
+        running: bool = false,
+        chunks: [4]Chunk = InitialMap,
 
-    pub fn deinit(_: *@This()) void {}
-
-    pub fn onJoin(
-        self: *@This(),
-        ctx: *Context,
-        client: *Client,
-    ) !void {
-        const b = try ctx.buffer_pools.allocBuf(.@"18");
-        errdefer ctx.buffer_pools.releaseBuf(b.idx);
-
-        const size = try (protocol.ClientPlayMapChunkBulk{
-            .chunk_data = &self.chunks,
-            .chunk_meta = &InitialMapMeta,
-            .sky_light = true,
-        }).encode(b.ptr);
-        ctx.prepareOneshot(client.fd, b, size);
-    }
-
-    pub fn onChatMessage(
-        self: *@This(),
-        ctx: *Context,
-        _: *Client,
-        message: []const u8,
-    ) !void {
-        if (std.mem.eql(u8, "start", message)) {
-            const b = try ctx.buffer_pools.allocBuf(.@"10");
-            var offset = (protocol.ClientPlayPlayerPositionAndLook{
-                .x = 0.0,
-                .y = 67.0,
-                .z = 0.0,
-                .flags = 0,
-                .pitch = 0,
-                .yaw = 0,
-            }).encode(b.ptr) catch return;
-            offset += (protocol.ClientPlayChangeGameState{
-                .change_game_mode = .survival,
-            }).encode(b.ptr[offset..]) catch return;
-
-            ctx.prepareBroadcast(b, offset);
-
-            try ctx.scheduler.schedule(&scheduleTimer, 0, 3);
-            try ctx.scheduler.schedule(&scheduleTimer, 20, 2);
-            try ctx.scheduler.schedule(&scheduleTimer, 40, 1);
-            try ctx.scheduler.schedule(&scheduleTimer, 60, 0);
-            try ctx.scheduler.schedule(&scheduleStart, 60, @intFromPtr(&self.running));
-        } else if (std.mem.eql(u8, "stop", message)) {
-            self.running = false;
-        }
-    }
-
-    pub fn onMove(
-        self: *@This(),
-        ctx: *Context,
-        client: *Client,
-    ) !void {
-        if (!self.running) {
-            return;
+        pub fn init(_: std.mem.Allocator) !@This() {
+            return @This(){};
         }
 
-        const l = client.e.get(ctx.entities, common.types.EntityLocation).?;
+        pub fn deinit(_: *@This()) void {}
 
-        if (l.y < 50) {
-            self.running = false;
+        pub fn onJoin(
+            self: *@This(),
+            reg: anytype,
+            cb: *zcs.CmdBuf,
+            ctx: *Context,
+            client: *Client,
+        ) !void {
+            _ = reg.get(opt.location_mod); // check location module
 
-            var buf: [256]u8 = undefined;
-            const b = try ctx.buffer_pools.allocBuf(.@"10");
+            const b = try ctx.buffer_pools.allocBuf(.@"18");
             errdefer ctx.buffer_pools.releaseBuf(b.idx);
 
-            var offset = try (protocol.ClientPlayChatMessage{
-                .json = try std.fmt.bufPrint(
-                    buf[0..],
-                    "{f}",
-                    .{common.chat.Chat{
-                        .text = "",
-                        .color = .yellow,
-                        .extra = &.{
-                            .{ .text = client.username.items, .color = .red },
-                            .{ .text = " est un gros loser" },
-                        },
-                    }},
-                ),
-                .position = .system,
+            const size = try (protocol.ClientPlayMapChunkBulk{
+                .chunk_data = &self.chunks,
+                .chunk_meta = &InitialMapMeta,
+                .sky_light = true,
             }).encode(b.ptr);
-            offset += try (protocol.ClientPlayChangeGameState{
-                .change_game_mode = .spectator,
-            }).encode(b.ptr[offset..]);
-
-            ctx.prepareBroadcast(b, offset);
-            return;
+            ctx.prepareOneshot(client.fd, b, size);
         }
 
-        if (!l.on_ground) {
-            return;
+        pub fn onChatMessage(
+            self: *@This(),
+            ctx: *Context,
+            _: *Client,
+            message: []const u8,
+        ) !void {
+            if (std.mem.eql(u8, "start", message)) {
+                const b = try ctx.buffer_pools.allocBuf(.@"10");
+                var offset = (protocol.ClientPlayPlayerPositionAndLook{
+                    .x = 0.0,
+                    .y = 67.0,
+                    .z = 0.0,
+                    .flags = 0,
+                    .pitch = 0,
+                    .yaw = 0,
+                }).encode(b.ptr) catch return;
+                offset += (protocol.ClientPlayChangeGameState{
+                    .change_game_mode = .survival,
+                }).encode(b.ptr[offset..]) catch return;
+
+                ctx.prepareBroadcast(b, offset);
+
+                try ctx.scheduler.schedule(&scheduleTimer, 0, 3);
+                try ctx.scheduler.schedule(&scheduleTimer, 20, 2);
+                try ctx.scheduler.schedule(&scheduleTimer, 40, 1);
+                try ctx.scheduler.schedule(&scheduleTimer, 60, 0);
+                try ctx.scheduler.schedule(&scheduleStart, 60, @intFromPtr(&self.running));
+            } else if (std.mem.eql(u8, "stop", message)) {
+                self.running = false;
+            }
         }
 
-        const x: i32 = @intFromFloat(@floor(l.x));
-        const z: i32 = @intFromFloat(@floor(l.z));
+        pub fn onMove(
+            self: *@This(),
+            ctx: *Context,
+            client: *Client,
+        ) !void {
+            if (!self.running) {
+                return;
+            }
 
-        try ctx.scheduler.schedule(&scheduleRemove, 10, @bitCast(BlockPos{ .x = x, .z = z }));
-    }
-};
+            const l = client.e.get(ctx.entities, common.types.EntityLocation).?;
+
+            if (l.y < 50) {
+                self.running = false;
+
+                var buf: [256]u8 = undefined;
+                const b = try ctx.buffer_pools.allocBuf(.@"10");
+                errdefer ctx.buffer_pools.releaseBuf(b.idx);
+
+                var offset = try (protocol.ClientPlayChatMessage{
+                    .json = try std.fmt.bufPrint(
+                        buf[0..],
+                        "{f}",
+                        .{common.chat.Chat{
+                            .text = "",
+                            .color = .yellow,
+                            .extra = &.{
+                                .{ .text = client.username.items, .color = .red },
+                                .{ .text = " est un gros loser" },
+                            },
+                        }},
+                    ),
+                    .position = .system,
+                }).encode(b.ptr);
+                offset += try (protocol.ClientPlayChangeGameState{
+                    .change_game_mode = .spectator,
+                }).encode(b.ptr[offset..]);
+
+                ctx.prepareBroadcast(b, offset);
+                return;
+            }
+
+            if (!l.on_ground) {
+                return;
+            }
+
+            const x: i32 = @intFromFloat(@floor(l.x));
+            const z: i32 = @intFromFloat(@floor(l.z));
+
+            try ctx.scheduler.schedule(&scheduleRemove, 10, @bitCast(BlockPos{ .x = x, .z = z }));
+        }
+    };
+}
