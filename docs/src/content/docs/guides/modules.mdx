@@ -27,9 +27,6 @@ pub const MyModule = struct {
   // if MyModule is registered, this functon will
   // be called inline when a message is sent.
   pub fn onChatMessage(
-    self: *@This(), // current module
-    ctx: *Context, // game context
-    reg: anytype, // module registry
     client: *Client, // player who sent the message
     msg: []const u8, // slice pointing to the message
   ) !void {
@@ -37,6 +34,46 @@ pub const MyModule = struct {
       client.username.items,
       msg,
     });
+  }
+};
+```
+
+## Hooks
+
+The dispatcher reflects on hook types at compile-time to inject required arguments.
+Any hook may take one of the following argument types, the ordering is interchangeable:
+
+- `*@This()`: current module
+- `*Context`: game context
+- `anytype`: module registry
+
+Since the final `ModuleRegistry` type is a tuple that depends on every registered
+module types, individual modules can't directly access it. Instead, the dispatcher
+uses `anytype`. It'll inject a pointer to the module registry for each parameter
+defined with type `anytype`. [See more](#module-dependencies).
+
+Each hook type may also take a set of specific hook parameters.
+More documentation soon.
+
+Here are a few hook definitions:
+
+```zig
+pub const CounterModule = struct {
+  counter: usize = 0,
+
+  ...
+
+  // onJoin means the dispatcher will call this
+  // hook when a player joins
+  pub fn onJoin(self: *@This(), client: *Client) !void {
+    self.counter += 1;
+    std.log.info("{s} joined", .{self.counter});
+  }
+
+  // called when a player leaves
+  pub fn onQuit(self: *@This(), client: *Client) !void {
+    self.counter -= 1;
+    sef.log.info("{s} left", .{self.counter});
   }
 };
 ```
@@ -82,14 +119,15 @@ pub const ModuleB = struct {
   ...
 
   pub fn onJoin(
-    self: *@This(),
-    ctx: Context,
     reg: anytype,
     client: *Client,
   ) !void {
     const module_a = reg.get(ModuleA);
     module_a.counter += 1;
-    std.log.info("counter: {d}", .{ module_a.counter });
+    std.log.info("{s} joined, counter: {d}", .{
+      client.username.items,
+      module_a.counter,
+    });
   }
 }
 ```
@@ -136,10 +174,8 @@ pub fn ModuleB(comptime opt: ModuleBOptions) type {
     ...
 
     pub fn onJoin(
-      self: *@This(),
-      ctx: Context,
       reg: anytype,
-      client: *Client,
+      _: *Client,
     ) !void {
       const module_a = reg.get(opt.module_a);
       module_a.counter += 1;
