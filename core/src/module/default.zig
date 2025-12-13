@@ -18,10 +18,7 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
         alloc: std.mem.Allocator,
 
         fn prepareAddOne(ctx: *Context, client: *Client) !void {
-            const b = try ctx.buffer_pools.allocBuf(.@"6");
-            errdefer ctx.buffer_pools.releaseBuf(b.idx);
-
-            const size = try (protocol.ClientPlayPlayerListItem{
+            const b, const size = try ctx.encode(protocol.ClientPlayPlayerListItem{
                 .add_player = &.{
                     .{
                         .uuid = client.uuid,
@@ -31,7 +28,7 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
                         .display_name = null,
                     },
                 },
-            }).encode(b.ptr);
+            }, .@"10");
             ctx.prepareBroadcast(b, size);
         }
 
@@ -55,12 +52,9 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
                 }
             }
 
-            const b = try ctx.buffer_pools.allocBuf(.@"14");
-            errdefer ctx.buffer_pools.releaseBuf(b.idx);
-
-            const size = try (protocol.ClientPlayPlayerListItem{
+            const b, const size = try ctx.encode(protocol.ClientPlayPlayerListItem{
                 .add_player = list.items,
-            }).encode(b.ptr);
+            }, .@"14");
             ctx.prepareOneshot(client.fd, b, size);
         }
 
@@ -81,13 +75,9 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
 
         pub fn onQuit(ctx: *Context, client: *Client) !void {
             if (opt.update_playerlist) {
-                const b = try ctx.buffer_pools.allocBuf(.@"6");
-                const size = (protocol.ClientPlayPlayerListItem{
+                const b, const size = try ctx.encode(protocol.ClientPlayPlayerListItem{
                     .remove_player = &.{client.uuid},
-                }).encode(b.ptr) catch {
-                    ctx.buffer_pools.releaseBuf(b.idx);
-                    return;
-                };
+                }, .@"10");
                 ctx.prepareBroadcast(b, size);
             }
         }
