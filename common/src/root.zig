@@ -28,6 +28,7 @@ pub const GameMessage = union(enum) {
         b: *Buffer,
         size: usize,
     },
+    disconnect: i32,
 };
 
 pub fn ModuleRegistry(comptime Modules: anytype) type {
@@ -129,6 +130,13 @@ pub const Context = struct {
             .size = size,
         } });
 
+        const val: u64 = 0;
+        _ = std.os.linux.write(self.efd, std.mem.asBytes(&val), 8);
+    }
+
+    pub fn disconnect(self: *Context, fd: i32) void {
+        self.client_manager.remove(fd);
+        self.tx.push(.{ .disconnect = fd });
         const val: u64 = 0;
         _ = std.os.linux.write(self.efd, std.mem.asBytes(&val), 8);
     }

@@ -254,6 +254,12 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(common.Ga
                             .prepare_broadcast => |d| {
                                 ring.prepareBroadcast(&ctx, d.b, d.size) catch tx.push(.{ .write_error = d.b.idx });
                             },
+                            .disconnect => |fd| {
+                                if (client_manager.get(fd) != null) {
+                                    client_manager.remove(fd);
+                                    std.posix.close(fd);
+                                }
+                            },
                         }
                         rx.pop();
                     }
