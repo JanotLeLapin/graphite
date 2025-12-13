@@ -36,6 +36,8 @@ fn dispatch(
     comptime method_name: []const u8,
     args: anytype,
 ) void {
+    var cbo: ?zcs.CmdBuf = null;
+
     inline for (root.Modules) |ModuleType| {
         const instance = ctx.getModuleRegistry(root.ModuleRegistry).get(ModuleType);
 
@@ -63,6 +65,13 @@ fn dispatch(
                         .pointer => |p| {
                             if (Context == p.child) {
                                 call_args[i] = ctx;
+                                continue;
+                            }
+                            if (zcs.CmdBuf == p.child) {
+                                if (cbo == null) {
+                                    cbo = zcs.CmdBuf.init(.{ .name = null, .gpa = ctx.zcs_alloc, .es = ctx.entities }) catch return;
+                                }
+                                call_args[i] = &cbo.?;
                                 continue;
                             }
                             if (@typeInfo(p.child) == .@"opaque") {
@@ -94,6 +103,11 @@ fn dispatch(
                 };
             }
         }
+    }
+
+    if (cbo != null) {
+        zcs.CmdBuf.Exec.immediate(ctx.entities, &cbo.?);
+        cbo.?.deinit(ctx.zcs_alloc, ctx.entities);
     }
 }
 
