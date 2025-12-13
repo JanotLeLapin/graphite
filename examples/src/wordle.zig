@@ -51,7 +51,6 @@ pub const WordleModule = struct {
     pub fn onChatMessage(
         self: *WordleModule,
         ctx: *Context,
-        _: anytype,
         client: *Client,
         message: []const u8,
     ) !void {

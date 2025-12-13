@@ -54,9 +54,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
         pub fn deinit(_: *@This()) void {}
 
         pub fn onStatus(
-            _: *@This(),
             ctx: *Context,
-            _: anytype,
             fd: i32,
         ) !void {
             const status = opt.status orelse return;
@@ -79,9 +77,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
         }
 
         pub fn onJoin(
-            _: *@This(),
             ctx: *Context,
-            _: anytype,
             client: *Client,
         ) !void {
             if (!opt.send_join_message) {
@@ -99,9 +95,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
         }
 
         pub fn onChatMessage(
-            _: *@This(),
             ctx: *Context,
-            _: anytype,
             client: *Client,
             message: []const u8,
         ) !void {
@@ -118,9 +112,7 @@ pub fn VanillaModule(comptime opt: VanillaModuleOptions) type {
         }
 
         pub fn onQuit(
-            _: *@This(),
             ctx: *Context,
-            _: anytype,
             client: *Client,
         ) !void {
             if (!opt.send_quit_message) {

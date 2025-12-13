@@ -50,31 +50,15 @@ pub fn LogModule(comptime opt: LogModuleOptions) type {
         }
         pub fn deinit(_: *@This()) void {}
 
-        pub fn onJoin(
-            _: *@This(),
-            _: *common.Context,
-            _: anytype,
-            client: *common.client.Client,
-        ) !void {
+        pub fn onJoin(client: *common.client.Client) !void {
             try info("join", "", opt, client, .{});
         }
 
-        pub fn onQuit(
-            _: *@This(),
-            _: *Context,
-            _: anytype,
-            client: *Client,
-        ) !void {
+        pub fn onQuit(client: *Client) !void {
             try info("quit", "", opt, client, .{});
         }
 
-        pub fn onChatMessage(
-            _: *@This(),
-            _: *Context,
-            _: anytype,
-            client: *Client,
-            msg: []const u8,
-        ) !void {
+        pub fn onChatMessage(client: *Client, msg: []const u8) !void {
             try info("chat", ": {s}", opt, client, .{msg});
         }
     };

@@ -41,11 +41,43 @@ fn dispatch(
 
         if (@hasDecl(ModuleType, method_name)) {
             const method = @field(ModuleType, method_name);
-            const call_args = .{
-                instance,
-                ctx,
-                ctx.getModuleRegistry(root.ModuleRegistry),
-            } ++ args;
+            const params = @typeInfo(@TypeOf(method)).@"fn".params;
+            const CallArgsType = blk: {
+                comptime var types: [params.len]type = undefined;
+                inline for (params, 0..) |param, i| {
+                    types[i] = if (param.type) |t| t else *root.ModuleRegistry;
+                }
+                break :blk std.meta.Tuple(&types);
+            };
+            var call_args: CallArgsType = undefined;
+            comptime var arg_idx: usize = 0;
+            inline for (params, 0..) |param, i| {
+                if (param.type) |pt| {
+                    if (pt == @TypeOf(instance)) {
+                        call_args[i] = instance;
+                        continue;
+                    }
+
+                    const paramTypeInfo = @typeInfo(pt);
+                    switch (paramTypeInfo) {
+                        .pointer => |p| {
+                            if (Context == p.child) {
+                                call_args[i] = ctx;
+                                continue;
+                            }
+                            if (@typeInfo(p.child) == .@"opaque") {
+                                call_args[i] = ctx.getModuleRegistry(root.ModuleRegistry);
+                                continue;
+                            }
+                        },
+                        else => {},
+                    }
+                    call_args[i] = args[arg_idx];
+                    arg_idx += 1;
+                } else {
+                    call_args[i] = ctx.getModuleRegistry(root.ModuleRegistry);
+                }
+            }
             const result = @call(.always_inline, method, call_args);
 
             const ReturnType = @typeInfo(@TypeOf(result));

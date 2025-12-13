@@ -198,9 +198,7 @@ pub const PachelbelModule = struct {
     pub fn deinit(_: *PachelbelModule) void {}
 
     pub fn onJoin(
-        _: *PachelbelModule,
         ctx: *common.Context,
-        _: anytype,
         client: *common.client.Client,
     ) !void {
         try ctx.scheduler.schedule(&scheduleTask, 1, @bitCast(ScheduleTaskData{ .client_fd = client.fd, .schedule = 0 }));

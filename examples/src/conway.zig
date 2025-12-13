@@ -123,7 +123,6 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
         pub fn onJoin(
             self: *@This(),
             ctx: *Context,
-            _: anytype,
             client: *Client,
         ) !void {
             var chunks: [ChunkCount]Chunk = undefined;
@@ -183,7 +182,6 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
         pub fn onDig(
             self: *@This(),
             ctx: *Context,
-            _: anytype,
             _: *Client,
             d: protocol.ServerPlayPlayerDigging,
         ) !void {
@@ -197,7 +195,6 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
         pub fn onChatMessage(
             self: *@This(),
             ctx: *Context,
-            _: anytype,
             _: *Client,
             message: []const u8,
         ) !void {
