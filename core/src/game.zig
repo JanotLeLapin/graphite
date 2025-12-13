@@ -46,7 +46,7 @@ fn dispatch(
                 ctx,
                 ctx.getModuleRegistry(root.ModuleRegistry),
             } ++ args;
-            const result = @call(.auto, method, call_args);
+            const result = @call(.always_inline, method, call_args);
 
             const ReturnType = @typeInfo(@TypeOf(result));
             if (ReturnType == .error_union) {
