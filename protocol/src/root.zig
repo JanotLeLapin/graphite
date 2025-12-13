@@ -6,6 +6,7 @@ const common = @import("graphite-common");
 const Chunk = common.types.chunk.Chunk;
 const BlockLocation = common.types.BlockLocation;
 const SlotData = common.types.SlotData;
+const Uuid = common.Uuid;
 
 pub const types = @import("types/mod.zig");
 
@@ -762,13 +763,13 @@ pub const ClientPlaySetSlot = struct {
 
 pub const ClientPlayPlayerListItem = union(enum) {
     add_player: []const AddPlayer,
-    update_gamemode,
-    update_latency,
-    update_display_name,
-    remove_player,
+    update_gamemode: []const u8,
+    update_latency: []const i32,
+    update_display_name: []?[]const u8,
+    remove_player: []const Uuid,
 
     pub const AddPlayer = struct {
-        uuid: common.Uuid,
+        uuid: Uuid,
         name: []const u8,
         // TODO: properties
         gamemode: u8,
@@ -781,17 +782,14 @@ pub const ClientPlayPlayerListItem = union(enum) {
         offset += types.VarInt.encode(0x38, buf[offset..]) catch return EncodingError.OutOfBounds;
 
         switch (self.*) {
-            .add_player => |a| {
-                buf[offset] = 0;
-                offset += 1;
-
-                offset += types.VarInt.encode(@intCast(a.len), buf[offset..]) catch return EncodingError.OutOfBounds;
-                for (a) |p| {
+            .add_player => |d| {
+                offset += try encodeValue(u8, 0, buf[offset..]);
+                offset += types.VarInt.encode(@intCast(d.len), buf[offset..]) catch return EncodingError.OutOfBounds;
+                for (d) |p| {
                     @memcpy(buf[offset .. offset + 16], &p.uuid.bytes);
                     offset += 16;
                     offset += try encodeValue([]const u8, p.name, buf[offset..]);
-                    buf[offset] = 0;
-                    offset += 1;
+                    offset += try encodeValue(u8, 0, buf[offset..]);
                     offset += types.VarInt.encode(@intCast(p.gamemode), buf[offset..]) catch return EncodingError.OutOfBounds;
                     offset += types.VarInt.encode(@intCast(p.ping), buf[offset..]) catch return EncodingError.OutOfBounds;
 
@@ -805,7 +803,42 @@ pub const ClientPlayPlayerListItem = union(enum) {
                     }
                 }
             },
-            else => {},
+            .update_gamemode => |d| {
+                offset += try encodeValue(u8, 1, buf[offset..]);
+                offset += types.VarInt.encode(@intCast(d.len), buf[offset..]) catch return EncodingError.OutOfBounds;
+                for (d) |g| {
+                    offset += types.VarInt.encode(@intCast(g), buf[offset..]) catch return EncodingError.OutOfBounds;
+                }
+            },
+            .update_latency => |d| {
+                offset += try encodeValue(u8, 2, buf[offset..]);
+                offset += types.VarInt.encode(@intCast(d.len), buf[offset..]) catch return EncodingError.OutOfBounds;
+                for (d) |l| {
+                    offset += types.VarInt.encode(l, buf[offset..]) catch return EncodingError.OutOfBounds;
+                }
+            },
+            .update_display_name => |d| {
+                offset += try encodeValue(u8, 3, buf[offset..]);
+                offset += types.VarInt.encode(@intCast(d.len), buf[offset..]) catch return EncodingError.OutOfBounds;
+                for (d) |dn| {
+                    if (dn) |display| {
+                        buf[offset] = 1;
+                        offset += 1;
+                        offset += try encodeValue([]const u8, display, buf[offset..]);
+                    } else {
+                        buf[offset] = 0;
+                        offset += 1;
+                    }
+                }
+            },
+            .remove_player => |d| {
+                offset += try encodeValue(u8, 4, buf[offset..]);
+                offset += types.VarInt.encode(@intCast(d.len), buf[offset..]) catch return EncodingError.OutOfBounds;
+                for (d) |id| {
+                    @memcpy(buf[offset .. offset + 16], &id.bytes);
+                    offset += 16;
+                }
+            },
         }
 
         const size = types.VarInt.encode(@intCast(offset - 5), buf) catch return EncodingError.OutOfBounds;
