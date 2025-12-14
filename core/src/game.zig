@@ -14,6 +14,7 @@ const ClientTag = common.types.ClientTag;
 const Context = common.Context;
 const EntityLocation = common.types.EntityLocation;
 const Scheduler = common.scheduler.Scheduler;
+const hook = common.hook;
 const zcs = common.zcs;
 
 const protocol = @import("graphite-protocol");
@@ -34,7 +35,7 @@ fn keepaliveTask(ctx: *common.Context, _: u64) void {
 fn dispatch(
     ctx: *common.Context,
     comptime method_name: []const u8,
-    args: anytype,
+    hook_data: anytype,
 ) void {
     var cbo: ?zcs.CmdBuf = null;
 
@@ -52,7 +53,7 @@ fn dispatch(
                 break :blk std.meta.Tuple(&types);
             };
             var call_args: CallArgsType = undefined;
-            comptime var arg_idx: usize = 0;
+            comptime var passed = false;
             inline for (params, 0..) |param, i| {
                 if (param.type) |pt| {
                     if (pt == @TypeOf(instance)) {
@@ -81,8 +82,12 @@ fn dispatch(
                         },
                         else => {},
                     }
-                    call_args[i] = args[arg_idx];
-                    arg_idx += 1;
+                    if (passed) {
+                        @compileError("extra arg defined in hook");
+                    } else {
+                        call_args[i] = hook_data;
+                        passed = true;
+                    }
                 } else {
                     call_args[i] = ctx.getModuleRegistry(root.ModuleRegistry);
                 }
@@ -169,7 +174,7 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
                 .packet => |p| {
                     switch (p.d) {
                         .status_request => {
-                            dispatch(&ctx, "onStatus", .{p.fd});
+                            dispatch(&ctx, "onStatus", hook.StatusHook{ .fd = p.fd });
                         },
                         .status_ping => |d| {
                             const b = try ctx.buffer_pools.allocBuf(.@"6");
@@ -183,23 +188,34 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
                         else => if (client_manager.get(p.fd)) |c| {
                             switch (p.d) {
                                 .play_player_position => |d| {
-                                    dispatch(&ctx, "onMove", .{ c, EntityLocation{
-                                        .x = d.x,
-                                        .y = d.y,
-                                        .z = d.z,
-                                        .on_ground = d.on_ground,
-                                    } });
+                                    dispatch(&ctx, "onMove", hook.MoveHook{
+                                        .client = c,
+                                        .location = EntityLocation{
+                                            .x = d.x,
+                                            .y = d.y,
+                                            .z = d.z,
+                                            .on_ground = d.on_ground,
+                                        },
+                                    });
                                 },
                                 .play_player_position_and_look => |d| {
-                                    dispatch(&ctx, "onMove", .{ c, EntityLocation{
-                                        .x = d.x,
-                                        .y = d.y,
-                                        .z = d.z,
-                                        .on_ground = d.on_ground,
-                                    } });
+                                    dispatch(&ctx, "onMove", hook.MoveHook{
+                                        .client = c,
+                                        .location = EntityLocation{
+                                            .x = d.x,
+                                            .y = d.y,
+                                            .z = d.z,
+                                            .on_ground = d.on_ground,
+                                        },
+                                    });
                                 },
                                 .play_player_digging => |d| {
-                                    dispatch(&ctx, "onDig", .{ c, d });
+                                    dispatch(&ctx, "onDig", hook.DigHook{
+                                        .client = c,
+                                        .status = d.status,
+                                        .location = d.location,
+                                        .face = d.face,
+                                    });
                                 },
                                 else => {},
                             }
@@ -260,14 +276,17 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
 
                     ctx.prepareOneshot(c.fd, b, offset);
 
-                    dispatch(&ctx, "onJoin", .{c});
+                    dispatch(&ctx, "onJoin", hook.JoinHook{ .client = c });
                 },
                 .player_chat => |d| if (client_manager.get(d.fd)) |c| {
-                    dispatch(&ctx, "onChatMessage", .{ c, d.message[0..d.message_len] });
+                    dispatch(&ctx, "onChatMessage", hook.ChatMessageHook{
+                        .client = c,
+                        .message = d.message[0..d.message_len],
+                    });
                 },
                 .player_quit => |fd| if (client_manager.get(fd)) |c| {
                     log.debug("player {d} left", .{fd});
-                    dispatch(&ctx, "onQuit", .{c});
+                    dispatch(&ctx, "onQuit", hook.QuitHook{ .client = c });
 
                     var cb = try zcs.CmdBuf.init(.{ .name = null, .gpa = zcs_alloc, .es = &entities });
                     defer cb.deinit(zcs_alloc, &entities);

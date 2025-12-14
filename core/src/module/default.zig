@@ -5,6 +5,7 @@ const common = @import("graphite-common");
 const Client = common.client.Client;
 const Context = common.Context;
 const EntityLocation = common.types.EntityLocation;
+const hook = common.hook;
 const zcs = common.zcs;
 
 const protocol = @import("graphite-protocol");
@@ -66,17 +67,17 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
 
         pub fn deinit(_: *@This()) void {}
 
-        pub fn onJoin(self: *@This(), ctx: *Context, client: *Client) !void {
+        pub fn onJoin(self: *@This(), ctx: *Context, h: hook.JoinHook) !void {
             if (opt.update_playerlist) {
-                prepareAddOne(ctx, client) catch log.warn("could not update player list", .{});
-                prepareAddAll(self, ctx, client) catch log.warn("could not update player list", .{});
+                prepareAddOne(ctx, h.client) catch log.warn("could not update player list", .{});
+                prepareAddAll(self, ctx, h.client) catch log.warn("could not update player list", .{});
             }
         }
 
-        pub fn onQuit(ctx: *Context, client: *Client) !void {
+        pub fn onQuit(ctx: *Context, h: hook.QuitHook) !void {
             if (opt.update_playerlist) {
                 const b, const size = try ctx.encode(protocol.ClientPlayPlayerListItem{
-                    .remove_player = &.{client.uuid},
+                    .remove_player = &.{h.client.uuid},
                 }, .@"10");
                 ctx.prepareBroadcast(b, size);
             }

@@ -5,6 +5,7 @@ const common = @import("graphite-common");
 const Client = common.client.Client;
 const Context = common.Context;
 const EntityLocation = common.types.EntityLocation;
+const hook = common.hook;
 const zcs = common.zcs;
 
 pub fn euclideanDist(a: EntityLocation, b: EntityLocation) f64 {
@@ -31,28 +32,27 @@ pub fn LocationModule(comptime opt: LocationModuleOptions) type {
 
         pub fn deinit(_: *@This()) void {}
 
-        pub fn onJoin(cb: *zcs.CmdBuf, client: *Client) !void {
-            _ = client.e.add(cb, EntityLocation, opt.spawn_point);
+        pub fn onJoin(cb: *zcs.CmdBuf, h: hook.JoinHook) !void {
+            _ = h.client.e.add(cb, EntityLocation, opt.spawn_point);
         }
 
         pub fn onMove(
             ctx: *Context,
-            client: *Client,
-            location: EntityLocation,
+            h: hook.MoveHook,
         ) !void {
-            const l = client.e.get(ctx.entities, EntityLocation).?;
+            const l = h.client.e.get(ctx.entities, EntityLocation).?;
             if (opt.max_dist) |md| {
-                const dist = euclideanDist(location, l.*);
+                const dist = euclideanDist(h.location, l.*);
                 if (dist > md) {
                     log.warn("kicking {s}: moved too fast: {d} blocks", .{
-                        client.username.items,
+                        h.client.username.items,
                         dist,
                     });
-                    ctx.disconnect(client.fd);
+                    ctx.disconnect(h.client.fd);
                     return;
                 }
             }
-            l.* = location;
+            l.* = h.location;
         }
     };
 }
