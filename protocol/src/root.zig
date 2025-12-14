@@ -875,6 +875,25 @@ pub const ClientPlayPlayerListItem = union(enum) {
     }
 };
 
+pub const ClientPlayTabComplete = struct {
+    matches: [][]const u8,
+
+    pub fn encode(self: *const @This(), buf: []u8) !usize {
+        var offset: usize = 5;
+        offset += try encodeValue(types.VarInt, .{ .value = 0x3A }, buf[offset..]);
+        offset += try encodeValue(types.VarInt, .{ .value = @intCast(self.matches.len) }, buf[offset..]);
+
+        for (self.matches) |match| {
+            offset += try encodeValue([]const u8, match, buf[offset..]);
+        }
+
+        const size = try encodeValue(types.VarInt, .{ .value = @intCast(offset - 5) }, buf);
+        @memmove(buf[size .. size + offset], buf[5 .. 5 + offset]);
+
+        return size + offset - 5;
+    }
+};
+
 /// Sent by the server before it disconnects a client.
 /// The client assumes that the server has already closed the connection by the time the packet arrives.
 pub const ClientPlayDisconnect = struct {
