@@ -20,3 +20,12 @@ pub const SlotData = packed struct {
     item_count: u8,
     item_damage: u16,
 };
+
+pub const DigStatus = enum(u8) {
+    started_digging = 0,
+    cancelled_digging,
+    finished_digging,
+    drop_item_stack,
+    drop_item,
+    shoot_arrow_finish_eating,
+};

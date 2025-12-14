@@ -329,14 +329,7 @@ pub const ServerPlayPlayerPositionAndLook = struct {
 };
 
 pub const ServerPlayPlayerDigging = struct {
-    status: enum(u8) {
-        started_digging = 0,
-        cancelled_digging,
-        finished_digging,
-        drop_item_stack,
-        drop_item,
-        shoot_arrow_finish_eating,
-    },
+    status: common.types.DigStatus,
     location: BlockLocation,
     face: u8,
 
