@@ -2,6 +2,7 @@ const std = @import("std");
 const log = std.log.scoped(.default_mod);
 
 const common = @import("graphite-common");
+const Chat = common.chat.Chat;
 const Client = common.client.Client;
 const Context = common.Context;
 const EntityLocation = common.types.EntityLocation;
@@ -11,11 +12,31 @@ const zcs = common.zcs;
 const protocol = @import("graphite-protocol");
 
 pub const DefaultModuleOptions = struct {
+    pub const Status = struct {
+        max_players: usize = 20,
+        version_name: []const u8,
+        description: Chat,
+    };
+
+    /// server list status
+    status: ?Status = null,
+
+    /// add/remove players from the tab list on join/quit
     update_playerlist: bool = true,
 };
 
+/// Convenient features
 pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
+    const StatusData = if (opt.status == null)
+        void
+    else
+        struct {
+            buf: [256]u8,
+            len: usize,
+        };
+
     return struct {
+        status: StatusData = undefined,
         alloc: std.mem.Allocator,
 
         fn prepareAddOne(ctx: *Context, client: *Client) !void {
@@ -60,12 +81,33 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
         }
 
         pub fn init(alloc: std.mem.Allocator) !@This() {
-            return @This(){
-                .alloc = alloc,
-            };
+            var self = @This(){ .alloc = alloc };
+            if (opt.status) |status| {
+                const slice = std.fmt.bufPrint(&self.status.buf, "{f}", .{status.description}) catch unreachable;
+                self.status.len = slice.len;
+            }
+            return self;
         }
 
         pub fn deinit(_: *@This()) void {}
+
+        pub fn onStatus(self: *@This(), ctx: *Context, h: hook.StatusHook) !void {
+            const status = opt.status orelse return;
+
+            var json: [512]u8 = undefined;
+            const b, const size = try ctx.encode(protocol.ClientStatusResponse{
+                .response = try std.fmt.bufPrint(
+                    json[0..],
+                    "{{\"version\":{{\"name\":\"" ++ status.version_name ++ "\",\"protocol\":47}},\"players\":{{\"max\":{d},\"online\":{d},\"sample\":[]}},\"description\":{s}}}",
+                    .{
+                        status.max_players,
+                        ctx.client_manager.count,
+                        self.status.buf[0..self.status.len],
+                    },
+                ),
+            }, .@"10");
+            ctx.prepareOneshot(h.fd, b, size);
+        }
 
         pub fn onJoin(self: *@This(), ctx: *Context, h: hook.JoinHook) !void {
             if (opt.update_playerlist) {
