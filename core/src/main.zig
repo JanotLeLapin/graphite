@@ -8,9 +8,9 @@ const EntityLocation = common.types.EntityLocation;
 
 const examples = @import("graphite-examples");
 const protocol = @import("graphite-protocol");
+const module = @import("graphite-module");
 
 const game = @import("game.zig");
-const module = @import("module.zig");
 const server = @import("server.zig");
 const uring = @import("uring.zig");
 

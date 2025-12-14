@@ -46,6 +46,16 @@ pub fn build(b: *std.Build) void {
     });
     protocol_mod.addImport("graphite-common", common_mod);
 
+    const module_mod = b.addModule("graphite-module", .{
+        .root_source_file = b.path("module/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "graphite-common", .module = common_mod },
+            .{ .name = "graphite-protocol", .module = protocol_mod },
+        },
+    });
+
     const examples_mod = b.addModule("graphite-examples", .{
         .root_source_file = b.path("examples/src/root.zig"),
         .target = target,
@@ -95,6 +105,7 @@ pub fn build(b: *std.Build) void {
                 // importing modules from different packages).
                 .{ .name = "graphite-common", .module = common_mod },
                 .{ .name = "graphite-protocol", .module = protocol_mod },
+                .{ .name = "graphite-module", .module = module_mod },
                 .{ .name = "graphite-examples", .module = examples_mod },
 
                 .{ .name = "spsc_queue", .module = spsc_queue_dep.module("spsc_queue") },
