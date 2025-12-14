@@ -151,7 +151,6 @@ pub const Context = struct {
     }
 
     pub fn disconnect(self: *Context, fd: i32) void {
-        self.client_manager.remove(fd);
         self.tx.push(.{ .disconnect = fd });
         const val: u64 = 0;
         _ = std.os.linux.write(self.efd, std.mem.asBytes(&val), 8);

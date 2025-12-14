@@ -255,6 +255,7 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(common.Ga
                                 ring.prepareBroadcast(&ctx, d.b, d.size) catch tx.push(.{ .write_error = d.b.idx });
                             },
                             .disconnect => |fd| {
+                                tx.push(.{ .player_quit = fd });
                                 if (client_manager.get(fd) != null) {
                                     client_manager.remove(fd);
                                     std.posix.close(fd);
