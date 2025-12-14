@@ -17,7 +17,13 @@ pub fn euclideanDist(a: EntityLocation, b: EntityLocation) f64 {
 }
 
 pub const LocationModuleOptions = struct {
+    /// first value of the EntityLocation component
+    /// for a player on join
     spawn_point: EntityLocation,
+
+    /// if this value is defined, the module will kick players
+    /// when the euclidean distance between their current and
+    /// next location is greater than the given value.
     max_dist: ?f64 = null,
 };
 
