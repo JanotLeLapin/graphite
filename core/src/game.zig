@@ -284,6 +284,13 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
                         .message = d.message[0..d.message_len],
                     });
                 },
+                .player_tab_complete => |d| if (client_manager.get(d.fd)) |c| {
+                    dispatch(&ctx, "onTabComplete", hook.TabCompleteHook{
+                        .client = c,
+                        .text = d.text[0..d.text_len],
+                        .looked_at_block = d.looked_at_block,
+                    });
+                },
                 .player_quit => |fd| if (client_manager.get(fd)) |c| {
                     log.debug("player {d} left", .{fd});
                     dispatch(&ctx, "onQuit", hook.QuitHook{ .client = c });

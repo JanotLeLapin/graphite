@@ -338,6 +338,38 @@ pub const ServerPlayPlayerDigging = struct {
     }
 };
 
+pub const ServerPlayTabComplete = struct {
+    text: []const u8,
+    looked_at_block: ?BlockLocation,
+
+    pub fn decode(buf: []const u8) !@This() {
+        var res: @This() = undefined;
+        var offset: usize = 0;
+
+        {
+            const decoded = try decodeValue([]const u8, buf[offset..]);
+            res.text = decoded.value;
+            offset += decoded.len;
+        }
+
+        const flag = blk: {
+            const decoded = try decodeValue(bool, buf[offset..]);
+            offset += 1;
+            break :blk decoded.value;
+        };
+
+        if (flag) {
+            const decoded = try decodeValue(BlockLocation, buf[offset..]);
+            res.looked_at_block = decoded.value;
+            offset += decoded.len;
+        } else {
+            res.looked_at_block = null;
+        }
+
+        return res;
+    }
+};
+
 pub const ServerPlayClientSettings = struct {
     locale: []const u8,
     view_distance: u8,
@@ -369,6 +401,7 @@ pub const ServerBoundPacket = union(enum) {
     play_player_look: ServerPlayPlayerLook,
     play_player_position_and_look: ServerPlayPlayerPositionAndLook,
     play_player_digging: ServerPlayPlayerDigging,
+    play_tab_complete: ServerPlayTabComplete,
     play_client_settings: ServerPlayClientSettings,
 
     pub fn decode(
@@ -394,6 +427,7 @@ pub const ServerBoundPacket = union(enum) {
                 0x05 => .{ .play_player_look = try ServerPlayPlayerLook.decode(buf) },
                 0x06 => .{ .play_player_position_and_look = try ServerPlayPlayerPositionAndLook.decode(buf) },
                 0x07 => .{ .play_player_digging = try ServerPlayPlayerDigging.decode(buf) },
+                0x14 => .{ .play_tab_complete = try ServerPlayTabComplete.decode(buf) },
                 0x15 => .{ .play_client_settings = try ServerPlayClientSettings.decode(buf) },
                 else => return ServerBoundPacketError.BadPacketId,
             },

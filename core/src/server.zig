@@ -74,6 +74,17 @@ fn processPacket(
             @memcpy(msg.player_chat.message[0..len], pd.message[0..len]);
             ctx.tx.push(msg);
         },
+        .play_tab_complete => |pd| {
+            const len = @min(pd.text.len, 128);
+            var msg = root.ServerMessage{ .player_tab_complete = .{
+                .fd = client.fd,
+                .text_len = len,
+                .text = undefined,
+                .looked_at_block = pd.looked_at_block,
+            } };
+
+            @memcpy(msg.player_tab_complete.text[0..len], pd.text[0..len]);
+            ctx.tx.push(msg);
         },
         else => ctx.tx.push(.{ .packet = .{
             .fd = client.fd,

@@ -51,6 +51,12 @@ pub const ServerMessage = union(enum) {
         message: [128]u8,
         message_len: usize,
     },
+    player_tab_complete: struct {
+        fd: i32,
+        text: [128]u8,
+        text_len: usize,
+        looked_at_block: ?common.types.BlockLocation,
+    },
     player_quit: i32,
     stop,
 };

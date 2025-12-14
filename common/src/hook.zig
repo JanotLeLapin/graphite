@@ -20,3 +20,8 @@ pub const ChatMessageHook = struct {
     client: *Client,
     message: []const u8,
 };
+pub const TabCompleteHook = struct {
+    client: *Client,
+    text: []const u8,
+    looked_at_block: ?BlockLocation,
+};
