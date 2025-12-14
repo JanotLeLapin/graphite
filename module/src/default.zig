@@ -13,7 +13,7 @@ const protocol = @import("graphite-protocol");
 
 pub const DefaultModuleOptions = struct {
     pub const Status = struct {
-        max_players: usize = 20,
+        max_players: ?usize = null,
         version_name: []const u8,
         description: Chat,
     };
@@ -23,6 +23,9 @@ pub const DefaultModuleOptions = struct {
 
     /// add/remove players from the tab list on join/quit
     update_playerlist: bool = true,
+
+    /// enforce max player count on the server
+    max_players: ?usize = null,
 };
 
 /// Convenient features
@@ -94,13 +97,20 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
         pub fn onStatus(self: *@This(), ctx: *Context, h: hook.StatusHook) !void {
             const status = opt.status orelse return;
 
+            const max_players = if (opt.max_players) |mp|
+                mp
+            else if (status.max_players) |mp|
+                mp
+            else
+                @compileError("one of opt.max_players or opt.status.max_players must be set");
+
             var json: [512]u8 = undefined;
             const b, const size = try ctx.encode(protocol.ClientStatusResponse{
                 .response = try std.fmt.bufPrint(
                     json[0..],
                     "{{\"version\":{{\"name\":\"" ++ status.version_name ++ "\",\"protocol\":47}},\"players\":{{\"max\":{d},\"online\":{d},\"sample\":[]}},\"description\":{s}}}",
                     .{
-                        status.max_players,
+                        max_players,
                         ctx.client_manager.count,
                         self.status.buf[0..self.status.len],
                     },
@@ -110,6 +120,14 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
         }
 
         pub fn onJoin(self: *@This(), ctx: *Context, h: hook.JoinHook) !void {
+            if (opt.max_players) |max_players| {
+                if (ctx.client_manager.count > max_players) {
+                    log.warn("kicked {s}: max player count reached", .{h.client.username.items});
+                    ctx.disconnect(h.client.fd);
+                    return;
+                }
+            }
+
             if (opt.update_playerlist) {
                 prepareAddOne(ctx, h.client) catch log.warn("could not update player list", .{});
                 prepareAddAll(self, ctx, h.client) catch log.warn("could not update player list", .{});
