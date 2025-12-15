@@ -197,7 +197,7 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
             ctx: *Context,
             h: hook.ChatMessageHook,
         ) !void {
-            if (std.mem.eql(u8, h.message, "conway")) {
+            if (std.mem.eql(u8, h.message, "/conway")) {
                 switch (self.running) {
                     true => {
                         const b = try ctx.buffer_pools.allocBuf(.@"10");
@@ -213,6 +213,17 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
                 }
                 self.running = !self.running;
             }
+        }
+
+        pub fn onTabComplete(ctx: *Context, h: hook.TabCompleteHook) !void {
+            if (!std.mem.startsWith(u8, "/conway", h.text)) {
+                return;
+            }
+
+            const b, const size = try ctx.encode(protocol.ClientPlayTabComplete{
+                .matches = &.{"/conway"},
+            }, .@"6");
+            ctx.prepareOneshot(h.client.fd, b, size);
         }
     };
 }
