@@ -876,7 +876,7 @@ pub const ClientPlayPlayerListItem = union(enum) {
 };
 
 pub const ClientPlayTabComplete = struct {
-    matches: [][]const u8,
+    matches: []const []const u8,
 
     pub fn encode(self: *const @This(), buf: []u8) !usize {
         var offset: usize = 5;
