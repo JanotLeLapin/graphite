@@ -9,6 +9,7 @@ const BlockLocation = common.types.BlockLocation;
 const Client = common.client.Client;
 const Context = common.Context;
 const Chunk = common.types.chunk.Chunk;
+const hook = common.hook;
 
 const protocol = @import("graphite-protocol");
 
@@ -123,7 +124,7 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
         pub fn onJoin(
             self: *@This(),
             ctx: *Context,
-            client: *Client,
+            h: hook.JoinHook,
         ) !void {
             var chunks: [ChunkCount]Chunk = undefined;
             var meta: [ChunkCount]protocol.ChunkMeta = undefined;
@@ -176,29 +177,27 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
                 .sky_light = true,
             }).encode(b.ptr);
 
-            ctx.prepareOneshot(client.fd, b, size);
+            ctx.prepareOneshot(h.client.fd, b, size);
         }
 
         pub fn onDig(
             self: *@This(),
             ctx: *Context,
-            _: *Client,
-            d: protocol.ServerPlayPlayerDigging,
+            h: hook.DigHook,
         ) !void {
-            if (d.status != .cancelled_digging and d.status != .finished_digging) {
+            if (h.status != .cancelled_digging and h.status != .finished_digging) {
                 return;
             }
 
-            try self.flipBlock(ctx, @intCast(d.location.x), @intCast(d.location.z));
+            try self.flipBlock(ctx, @intCast(h.location.x), @intCast(h.location.z));
         }
 
         pub fn onChatMessage(
             self: *@This(),
             ctx: *Context,
-            _: *Client,
-            message: []const u8,
+            h: hook.ChatMessageHook,
         ) !void {
-            if (std.mem.eql(u8, message, "conway")) {
+            if (std.mem.eql(u8, h.message, "conway")) {
                 switch (self.running) {
                     true => {
                         const b = try ctx.buffer_pools.allocBuf(.@"10");
