@@ -3,49 +3,17 @@
 const std = @import("std");
 
 const common = @import("graphite-common");
-const Chunk = common.types.chunk.Chunk;
 const BlockLocation = common.types.BlockLocation;
+const Chunk = common.types.chunk.Chunk;
+const ChunkMeta = common.types.chunk.ChunkMeta;
+const ClientState = common.types.ClientState;
+const Difficulty = common.types.Difficulty;
+const Dimension = common.types.Dimension;
+const GamemodeType = common.types.GamemodeType;
 const SlotData = common.types.SlotData;
 const Uuid = common.Uuid;
 
 pub const types = @import("types/mod.zig");
-
-pub const ClientState = enum(u8) {
-    handshake = 0,
-    status = 1,
-    login = 2,
-    play = 3,
-};
-
-pub const GamemodeType = enum(u8) {
-    survival = 0,
-    creative = 1,
-    adventure = 2,
-    spectator = 3,
-};
-
-pub fn Gamemode(comptime Gt: GamemodeType, comptime hardcore: bool) u8 {
-    return @intFromEnum(Gt) | (@as(u8, @intCast(@intFromBool(hardcore))) << 7);
-}
-
-pub const Dimension = enum(i8) {
-    nether = -1,
-    overworld = 0,
-    end = 1,
-};
-
-pub const Difficulty = enum(u8) {
-    peaceful = 0,
-    easy = 1,
-    normal = 2,
-    hard = 3,
-};
-
-pub const ChunkMeta = struct {
-    x: i32,
-    z: i32,
-    bit_mask: u16,
-};
 
 pub const EncodingError = error{
     OutOfBounds,

@@ -20,7 +20,7 @@ const URING_QUEUE_ENTRIES = 4096;
 
 pub const Client = struct {
     fd: i32,
-    state: protocol.ClientState,
+    state: common.types.ClientState,
     read_buf: [4096]u8,
     read_buf_tail: usize,
     addr: std.os.linux.sockaddr,

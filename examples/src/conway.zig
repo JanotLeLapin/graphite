@@ -127,7 +127,7 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
             h: hook.JoinHook,
         ) !void {
             var chunks: [ChunkCount]Chunk = undefined;
-            var meta: [ChunkCount]protocol.ChunkMeta = undefined;
+            var meta: [ChunkCount]common.types.chunk.ChunkMeta = undefined;
 
             for (0..ChunkRowCount) |cx| {
                 for (0..ChunkRowCount) |cz| {

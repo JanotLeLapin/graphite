@@ -2,6 +2,37 @@ pub const chunk = @import("types/chunk.zig");
 
 pub const ClientTag = struct { fd: i32 };
 
+pub const ClientState = enum(u8) {
+    handshake = 0,
+    status = 1,
+    login = 2,
+    play = 3,
+};
+
+pub const GamemodeType = enum(u8) {
+    survival = 0,
+    creative = 1,
+    adventure = 2,
+    spectator = 3,
+};
+
+pub fn Gamemode(comptime Gt: GamemodeType, comptime hardcore: bool) u8 {
+    return @intFromEnum(Gt) | (@as(u8, @intCast(@intFromBool(hardcore))) << 7);
+}
+
+pub const Dimension = enum(i8) {
+    nether = -1,
+    overworld = 0,
+    end = 1,
+};
+
+pub const Difficulty = enum(u8) {
+    peaceful = 0,
+    easy = 1,
+    normal = 2,
+    hard = 3,
+};
+
 pub const EntityLocation = struct {
     x: f64,
     y: f64,

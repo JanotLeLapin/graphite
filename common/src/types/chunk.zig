@@ -80,3 +80,9 @@ pub const Chunk = struct {
     sections: [16]ChunkSection,
     biomes: [256]BiomeType,
 };
+
+pub const ChunkMeta = struct {
+    x: i32,
+    z: i32,
+    bit_mask: u16,
+};

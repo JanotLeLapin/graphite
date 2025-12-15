@@ -51,7 +51,7 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
                     .{
                         .uuid = client.uuid,
                         .name = client.username.items,
-                        .gamemode = @intFromEnum(protocol.GamemodeType.survival),
+                        .gamemode = @intFromEnum(common.types.GamemodeType.survival),
                         .ping = 0,
                         .display_name = null,
                     },
@@ -73,7 +73,7 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
                     try list.append(self.alloc, .{
                         .uuid = c.uuid,
                         .name = c.username.items,
-                        .gamemode = @intFromEnum(protocol.GamemodeType.survival),
+                        .gamemode = @intFromEnum(common.types.GamemodeType.survival),
                         .ping = 0,
                         .display_name = null,
                     });

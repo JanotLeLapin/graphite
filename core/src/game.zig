@@ -256,7 +256,7 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
 
                     offset += try protocol.ClientPlayJoinGame.encode(&.{
                         .entity_id = 0,
-                        .gamemode = protocol.Gamemode(.survival, false),
+                        .gamemode = common.types.Gamemode(.survival, false),
                         .dimension = .overworld,
                         .difficulty = .normal,
                         .max_players = 20,
