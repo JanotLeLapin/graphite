@@ -26,6 +26,9 @@ pub const DefaultModuleOptions = struct {
 
     /// enforce max player count on the server
     max_players: ?usize = null,
+
+    /// tab-complete with currently online player names
+    tab_complete_player_names: bool = true,
 };
 
 /// Convenient features
@@ -132,6 +135,42 @@ pub fn DefaultModule(comptime opt: DefaultModuleOptions) type {
                 prepareAddOne(ctx, h.client) catch log.warn("could not update player list", .{});
                 prepareAddAll(self, ctx, h.client) catch log.warn("could not update player list", .{});
             }
+        }
+
+        pub fn onTabComplete(self: *@This(), ctx: *Context, h: hook.TabCompleteHook) !void {
+            if (!opt.tab_complete_player_names) {
+                return;
+            }
+
+            var matches = try std.ArrayList([]const u8).initCapacity(self.alloc, ctx.client_manager.count);
+            defer matches.deinit(self.alloc);
+
+            const text = blk: {
+                var cursor = h.text.len;
+                while (cursor > 0) {
+                    if (h.text[cursor - 1] == ' ') {
+                        break;
+                    }
+                    cursor -= 1;
+                }
+                break :blk h.text[cursor..];
+            };
+
+            for (ctx.client_manager.lookup.items) |slot| {
+                const c = slot.client orelse continue;
+                if (std.mem.startsWith(u8, c.username.items, text)) {
+                    matches.appendAssumeCapacity(c.username.items);
+                }
+            }
+
+            if (matches.items.len <= 0) {
+                return;
+            }
+
+            const b, const size = try ctx.encode(protocol.ClientPlayTabComplete{
+                .matches = matches.items,
+            }, .@"14");
+            ctx.prepareOneshot(h.client.fd, b, size);
         }
 
         pub fn onQuit(ctx: *Context, h: hook.QuitHook) !void {
