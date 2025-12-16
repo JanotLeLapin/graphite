@@ -60,3 +60,13 @@ pub const DigStatus = enum(u8) {
     drop_item,
     shoot_arrow_finish_eating,
 };
+
+pub const EntityActionId = enum(u8) {
+    start_sneaking = 0,
+    stop_sneaking,
+    leave_bed,
+    start_sprinting,
+    stop_sprinting,
+    jump_with_horse,
+    open_ridden_horse_inventory,
+};

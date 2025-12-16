@@ -86,6 +86,12 @@ fn processPacket(
             @memcpy(msg.player_tab_complete.text[0..len], pd.text[0..len]);
             ctx.tx.push(msg);
         },
+        .play_entity_action => |pd| {
+            ctx.tx.push(.{ .packet = .{
+                .fd = client.fd,
+                .d = .{ .play_entity_action = pd },
+            } });
+        },
         else => ctx.tx.push(.{ .packet = .{
             .fd = client.fd,
             .d = p,

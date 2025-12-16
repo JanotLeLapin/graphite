@@ -306,6 +306,16 @@ pub const ServerPlayPlayerDigging = struct {
     }
 };
 
+pub const ServerPlayEntityAction = struct {
+    entity_id: types.VarInt,
+    action_id: common.types.EntityActionId,
+    action_parameter: types.VarInt,
+
+    pub fn decode(buf: []const u8) !@This() {
+        return try genDecodeBasic(@This())(buf);
+    }
+};
+
 pub const ServerPlayTabComplete = struct {
     text: []const u8,
     looked_at_block: ?BlockLocation,
@@ -369,6 +379,7 @@ pub const ServerBoundPacket = union(enum) {
     play_player_look: ServerPlayPlayerLook,
     play_player_position_and_look: ServerPlayPlayerPositionAndLook,
     play_player_digging: ServerPlayPlayerDigging,
+    play_entity_action: ServerPlayEntityAction,
     play_tab_complete: ServerPlayTabComplete,
     play_client_settings: ServerPlayClientSettings,
 
@@ -395,6 +406,7 @@ pub const ServerBoundPacket = union(enum) {
                 0x05 => .{ .play_player_look = try ServerPlayPlayerLook.decode(buf) },
                 0x06 => .{ .play_player_position_and_look = try ServerPlayPlayerPositionAndLook.decode(buf) },
                 0x07 => .{ .play_player_digging = try ServerPlayPlayerDigging.decode(buf) },
+                0x0B => .{ .play_entity_action = try ServerPlayEntityAction.decode(buf) },
                 0x14 => .{ .play_tab_complete = try ServerPlayTabComplete.decode(buf) },
                 0x15 => .{ .play_client_settings = try ServerPlayClientSettings.decode(buf) },
                 else => return ServerBoundPacketError.BadPacketId,

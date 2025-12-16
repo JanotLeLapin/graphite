@@ -217,6 +217,13 @@ pub fn main(running: *std.atomic.Value(bool), efd: i32, rx: *SpscQueue(root.Serv
                                         .face = d.face,
                                     });
                                 },
+                                .play_entity_action => |d| {
+                                    dispatch(&ctx, "onEntityAction", hook.EntityActionHook{
+                                        .client = c,
+                                        .action_id = d.action_id,
+                                        .action_parameter = d.action_parameter.value,
+                                    });
+                                },
                                 else => {},
                             }
                         },

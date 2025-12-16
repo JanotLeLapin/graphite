@@ -16,6 +16,11 @@ pub const DigHook = struct {
     location: BlockLocation,
     face: u8,
 };
+pub const EntityActionHook = struct {
+    client: *Client,
+    action_id: root.types.EntityActionId,
+    action_parameter: i32,
+};
 pub const ChatMessageHook = struct {
     client: *Client,
     message: []const u8,
