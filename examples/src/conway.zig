@@ -192,26 +192,36 @@ pub fn ConwayModule(comptime opt: ConwayModuleOptions) type {
             try self.flipBlock(ctx, @intCast(h.location.x), @intCast(h.location.z));
         }
 
+        fn toggleRunning(self: *@This(), ctx: *Context) !void {
+            switch (self.running) {
+                true => {
+                    const b = try ctx.buffer_pools.allocBuf(.@"10");
+                    const size = try (protocol.ClientPlayChangeGameState{ .change_game_mode = .survival }).encode(b.ptr);
+                    ctx.prepareBroadcast(b, size);
+                },
+                false => {
+                    const b = try ctx.buffer_pools.allocBuf(.@"10");
+                    const size = try (protocol.ClientPlayChangeGameState{ .change_game_mode = .creative }).encode(b.ptr);
+                    ctx.prepareBroadcast(b, size);
+                    try ctx.scheduler.schedule(&schedule, 0, @intFromPtr(self));
+                },
+            }
+            self.running = !self.running;
+        }
+
+        pub fn onEntityAction(self: *@This(), ctx: *Context, h: hook.EntityActionHook) !void {
+            if (h.action_id == .start_sneaking) {
+                try self.toggleRunning(ctx);
+            }
+        }
+
         pub fn onChatMessage(
             self: *@This(),
             ctx: *Context,
             h: hook.ChatMessageHook,
         ) !void {
             if (std.mem.eql(u8, h.message, "/conway")) {
-                switch (self.running) {
-                    true => {
-                        const b = try ctx.buffer_pools.allocBuf(.@"10");
-                        const size = try (protocol.ClientPlayChangeGameState{ .change_game_mode = .survival }).encode(b.ptr);
-                        ctx.prepareBroadcast(b, size);
-                    },
-                    false => {
-                        const b = try ctx.buffer_pools.allocBuf(.@"10");
-                        const size = try (protocol.ClientPlayChangeGameState{ .change_game_mode = .creative }).encode(b.ptr);
-                        ctx.prepareBroadcast(b, size);
-                        try ctx.scheduler.schedule(&schedule, 0, @intFromPtr(self));
-                    },
-                }
-                self.running = !self.running;
+                try self.toggleRunning(ctx);
             }
         }
 
